@@ -14,12 +14,19 @@ from pathlib import Path
 import torch
 from torch import nn
 
-NVSUBQ_ROOT = Path("/home/dwessel/code/nvSubquadratic-private")
-
-
-def _ensure_nvsubq_on_path() -> None:
-    if str(NVSUBQ_ROOT) not in sys.path:
-        sys.path.insert(0, str(NVSUBQ_ROOT))
+def _ensure_nvsubq_on_path(config_path: str) -> None:
+    # Derive repo root from the config file path: the config lives somewhere
+    # inside the nvSubquadratic repo, so walk up until we find nvsubquadratic/.
+    candidate = Path(config_path).resolve()
+    for parent in [candidate, *candidate.parents]:
+        if (parent / "nvsubquadratic").is_dir():
+            root = str(parent)
+            if root not in sys.path:
+                sys.path.insert(0, root)
+            return
+    raise RuntimeError(
+        f"Could not find nvsubquadratic/ package root from config path: {config_path}"
+    )
 
 
 def build_hyena_arc_resnet(config_path: str, num_tasks: int) -> nn.Module:
@@ -29,7 +36,7 @@ def build_hyena_arc_resnet(config_path: str, num_tasks: int) -> nn.Module:
         config_path: Absolute path to a cfg_*.py that exposes get_config().
         num_tasks:   Override the number of task tokens (matches dataset).
     """
-    _ensure_nvsubq_on_path()
+    _ensure_nvsubq_on_path(config_path)
 
     from nvsubquadratic.lazy_config import instantiate
 
