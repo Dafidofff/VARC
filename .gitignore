@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.pth
+*.pt
+raw_data/ARC-AGI/data/eval_color_permute_ttt_9/
+raw_data/ARC-AGI-2/data/eval_color_permute_ttt_9/
+saves/
+outputs/
+wandb/
+logs/
