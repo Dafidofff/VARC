@@ -75,8 +75,9 @@ def parse_args() -> argparse.Namespace:
         default="test",
         help="Which example subset to use when evaluating a split.",
     )
-    parser.add_argument("--architecture", type=str, choices=("vit", "unet"), default="vit", help="ViT or UNet architecture")
+    parser.add_argument("--architecture", type=str, choices=("vit", "unet", "hyena"), default="vit", help="ViT, UNet, or Hyena-ResNet architecture")
     parser.add_argument("--unet-size", type=str, choices=("small", "medium", "big"), default="medium", help="Choose the size of UNet wanted; small, medium, or big. Only applies if architecture==unet")
+    parser.add_argument("--hyena-config", type=str, default=None, help="Path to nvSubquadratic config file (get_config()). Required when --architecture hyena")
     parser.add_argument("--image-size", type=int, default=30)
     parser.add_argument("--num-colors", type=int, default=10)
     parser.add_argument("--embed-dim", type=int, default=256)

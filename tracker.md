@@ -2,8 +2,9 @@
 
 **Goal:** Reproduce the VARC-ViT-18M baseline on ARC-1 from scratch.  
 **Model:** VARC-ViT-18M (18M params, depth=10, embed-dim=512, patch-size=2, image-size=64)  
-**Cluster env:** `nvsubq` conda env, SLURM (gpu_h100 partition), 4×H100 GPUs  
-**Effective batch size:** 4 GPUs × batch 64 = 256 (same as paper's 8×32)
+**Cluster env:** `nvsubq` conda env, SLURM (`geodude` partition, account `geodudeusers`)  
+**Effective batch size:** 4 GPUs × batch 64 = 256 (same as paper's 8×32)  
+**Note:** Migrated from H100 cluster to geodude cluster (2026-04-22). Use `source conda.sh` not `mamba.sh` for env activation.
 
 ---
 
@@ -12,7 +13,8 @@
 | Step | Description | Status |
 |------|-------------|--------|
 | 1 | Build augmented TTT dataset (`augment_data.py`) | ✅ Done |
-| 2 | Offline pretraining of VARC-ViT (`submit_pretrain_varc_vit_h100.sh`) | 🔄 Submitted (PENDING) |
+| 2a | Smoketest pretraining on 2 geodude GPUs | 🔄 Running (157254) |
+| 2b | Full offline pretraining of VARC-ViT | ⏳ Pending smoketest |
 | 3 | Test-time training (TTT) for ARC-1 | ⏳ Pending |
 | 4 | Run analysis and generate HTML visualizations | ⏳ Pending |
 
@@ -33,31 +35,30 @@ outputting per-task JSON files into `raw_data/ARC-AGI/eval_color_permute_ttt_9/`
 
 | Job ID | Script | Submitted | Status | Notes |
 |--------|--------|-----------|--------|-------|
-| —      | run interactively | 2026-04-22 | ✅ complete | ARC-AGI: 72s (400 tasks), ARC-AGI-2: 34s (120 tasks) |
+| —      | run interactively | 2026-04-22 | ✅ complete | ARC-AGI: 72s (400 tasks), ARC-AGI-2: 34s (120 tasks) — old cluster |
+| 157253 | submit_augment_data_geodude.sh | 2026-04-22 | ✅ complete | geodude cluster, ~61s. Log: `slurm/varc_augment_157253.out` |
 
 **Output locations:**
-- `raw_data/ARC-AGI/data/eval_color_permute_ttt_9/` — 400 task dirs, 20000 augmented pairs each
-- `raw_data/ARC-AGI-2/data/eval_color_permute_ttt_9/` — 120 task dirs, 6000 augmented pairs each
-
-**Note:** CPU partitions (rome, genoa) not accessible with current SLURM budget — ran interactively instead. GPU partition (gpu_h100) is available.
+- `raw_data/ARC-AGI/data/eval_color_permute_ttt_9/` — 400 task dirs ✅
+- `raw_data/ARC-AGI-2/data/eval_color_permute_ttt_9/` — 120 task dirs ✅
 
 ---
 
 ## Step 2 — Offline pretraining VARC-ViT
 
-**Script:** `submit_pretrain_varc_vit_h100.sh`  
-**Expected duration:** ~5h on 8×H200 → estimate 8–12h on 4×H100  
+**Script:** `submit_pretrain_varc_vit_geodude_smoketest.sh` (smoketest) → full run TBD  
+**Expected duration:** ~5h on 8×H200 → estimate TBD on geodude GPUs  
 **Checkpoint saved to:** `saves/offline_train_ViT/checkpoint_final.pt` and `checkpoint_best.pt`  
 **WandB project:** `VisionARC`, run name `varc_pretrain_baseline`
 
-**Key deviations from paper:** Paper uses 8×H200 with batch 32; we use 4×H100 with batch 64 to
-keep effective batch size = 256. All other hyperparameters match.
+**Key deviations from paper:** Paper uses 8×H200 with batch 32; geodude smoketest uses 2 GPUs
+batch 16 (effective 32) for 3 epochs to fit 24GB geodude GPUs. Full run will need to tune batch size.
 
 ### Jobs
 
 | Job ID | Script | Submitted | Status | Notes |
 |--------|--------|-----------|--------|-------|
-| 22109856 | submit_pretrain_varc_vit_h100.sh | 2026-04-22 | PENDING (Priority) | 4×H100, 1-day time limit. Log: `logs/varc_pretrain_22109856.out` |
+| 157258 | submit_pretrain_varc_vit_geodude_smoketest.sh | 2026-04-22 | ✅ DONE | 2 geodude GPUs, batch 16, 3 epochs. ~42 min/epoch. eval_loss=0.327, eval_acc=0.034. Log: `slurm/varc_pretrain_smoke_157258.out` |
 
 ---
 
@@ -86,6 +87,9 @@ keep effective batch size = 256. All other hyperparameters match.
 ## Insights & Notes
 
 - The README mentions conda env `visarc`, but the actual working env on this cluster is `nvsubq`.
+- Geodude GPUs are ~24GB (vs 80GB H100). Batch 64 OOMs; batch 16 fits. Full run may need gradient accumulation or more GPUs.
+- Must set `export PATH="/usr/local/cuda-13.0/bin:$PATH"` in SLURM scripts — required for `torch.compile`/inductor to find `nvcc`.
+- Use `source ~/miniforge3/etc/profile.d/conda.sh` + `conda activate nvsubq` (not mamba.sh).
 - Augmentation only covers the **evaluation** split (used for TTT); training data is used as-is for offline pretraining.
 - TTT script (`script/test_time_training_VARC_ViT_ARC1.sh`) parallelizes over 8 GPUs inline — needs adaptation for single-node SLURM with 4 GPUs.
 - Sanity checks (`script/sanity_ARC1.sh`, `script/sanity_ARC2.sh`) run TTT on a single task and require `checkpoint_best.pt` — skip until after step 2.

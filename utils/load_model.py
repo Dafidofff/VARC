@@ -1,8 +1,9 @@
 import os
 from typing import Any, Dict, Optional
 import torch
-from src.ARC_ViT import ARCViT  
+from src.ARC_ViT import ARCViT
 from src.ARC_UNet import ARCUNet
+from src.ARC_HyenaResNet import HyenaResNetVARCWrapper, build_hyena_arc_resnet
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.amp import GradScaler
 from utils.lr_scheduler import get_cosine_schedule_with_warmup
@@ -28,6 +29,11 @@ def get_model_arch(args, train_dataset):
             dropout=args.dropout,
             patch_size=args.patch_size,
         )
+    elif args.architecture == "hyena":
+        if not args.hyena_config:
+            raise ValueError("--hyena-config is required when --architecture hyena")
+        arc_resnet = build_hyena_arc_resnet(args.hyena_config, num_tasks=train_dataset.num_tasks)
+        model = HyenaResNetVARCWrapper(arc_resnet)
     else:
         model = ARCUNet(
             num_tasks=train_dataset.num_tasks,
