@@ -109,6 +109,11 @@ def load_models(args, train_dataset, device, distributed, rank, local_rank):
             start_epoch = checkpoint["epoch"] + 1
         elif "epoch" in checkpoint and resume_reset_epoch and ((not distributed) or rank == 0):
             print("Ignoring checkpoint epoch due to --resume-reset-epoch; restarting from epoch 1.")
+
+        resume_reset_optimizer = bool(getattr(args, "resume_reset_optimizer", False))
+        if not resume_reset_optimizer:
+            if "optimizer_state" in checkpoint:
+                optimizer.load_state_dict(checkpoint["optimizer_state"])
     else:
         model = get_model_arch(args, train_dataset)
       
@@ -146,6 +151,14 @@ def load_models(args, train_dataset, device, distributed, rank, local_rank):
         scheduler = get_cosine_schedule_with_warmup(optimizer, min(args.epochs // 5, 10), args.epochs)
     else:
         scheduler = None
+
+    resume_reset_optimizer = bool(getattr(args, "resume_reset_optimizer", False))
+    if checkpoint is not None and not resume_reset_optimizer:
+        if scheduler is not None and "scheduler_state" in checkpoint:
+            scheduler.load_state_dict(checkpoint["scheduler_state"])
+        if scaler.is_enabled() and "scaler_state" in checkpoint:
+            scaler.load_state_dict(checkpoint["scaler_state"])
+
     return model, model_for_eval, optimizer, scaler, scheduler, start_epoch
 
 

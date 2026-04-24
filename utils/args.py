@@ -37,6 +37,12 @@ def add_wandb_args(parser: argparse.ArgumentParser) -> None:
         default="",
         help="Optional run name for Weights & Biases.",
     )
+    parser.add_argument(
+        "--wandb-id",
+        type=str,
+        default=None,
+        help="W&B run ID to resume (sets resume='must'). Use with --resume-checkpoint.",
+    )
 
 def add_speed_optimizer_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--no-compile", action="store_true", help="Disable torch.compile optimization (useful for debugging).")
@@ -97,6 +103,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--save-path", type=str, default=None, help="Optional path to store the final trained checkpoint")
     parser.add_argument("--best-save-path", type=str, default=None, help="Optional path to store the checkpoint achieving the best evaluation accuracy.")
+    parser.add_argument("--latest-save-path", type=str, default=None, help="Path to save a checkpoint after every epoch (used for autoresume).")
 
     parser.add_argument("--ttt-num-each", type=int, default=2)
     parser.add_argument("--vis-every", type=int, default=25)

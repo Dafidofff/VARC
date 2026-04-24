@@ -2,9 +2,8 @@
 
 **Goal:** Reproduce the VARC-ViT-18M baseline on ARC-1 from scratch.  
 **Model:** VARC-ViT-18M (18M params, depth=10, embed-dim=512, patch-size=2, image-size=64)  
-**Cluster env:** `nvsubq` conda env, SLURM (`geodude` partition, account `geodudeusers`)  
-**Effective batch size:** 4 GPUs × batch 64 = 256 (same as paper's 8×32)  
-**Note:** Migrated from H100 cluster to geodude cluster (2026-04-22). Use `source conda.sh` not `mamba.sh` for env activation.
+**Cluster env:** `nvsubq` conda env, SLURM (`gpu_h100` partition)  
+**Effective batch size:** 4 GPUs × batch 64 = 256 (same as paper's 8×32)
 
 ---
 
@@ -13,9 +12,8 @@
 | Step | Description | Status |
 |------|-------------|--------|
 | 1 | Build augmented TTT dataset (`augment_data.py`) | ✅ Done |
-| 2a | Smoketest pretraining on 2 geodude GPUs | 🔄 Running (157254) |
-| 2b | Full offline pretraining of VARC-ViT | ⏳ Pending smoketest |
-| 3 | Test-time training (TTT) for ARC-1 | ⏳ Pending |
+| 2 | Offline pretraining of VARC-ViT (`submit_pretrain_varc_vit_h100.sh`) | ✅ Done |
+| 3 | Test-time training (TTT) for ARC-1 | 🔄 Running (job 22231590) |
 | 4 | Run analysis and generate HTML visualizations | ⏳ Pending |
 
 ---
@@ -46,19 +44,18 @@ outputting per-task JSON files into `raw_data/ARC-AGI/eval_color_permute_ttt_9/`
 
 ## Step 2 — Offline pretraining VARC-ViT
 
-**Script:** `submit_pretrain_varc_vit_geodude_smoketest.sh` (smoketest) → full run TBD  
-**Expected duration:** ~5h on 8×H200 → estimate TBD on geodude GPUs  
+**Script:** `submit_pretrain_varc_vit_h100.sh`  
+**Expected duration:** ~5h on 8×H200 → ~10.5h on 4×H100 (actual)  
 **Checkpoint saved to:** `saves/offline_train_ViT/checkpoint_final.pt` and `checkpoint_best.pt`  
-**WandB project:** `VisionARC`, run name `varc_pretrain_baseline`
+**WandB project:** `VisionARC`, run name `varc_pretrain_baseline`, run ID `cwkfvy5p`
 
-**Key deviations from paper:** Paper uses 8×H200 with batch 32; geodude smoketest uses 2 GPUs
-batch 16 (effective 32) for 3 epochs to fit 24GB geodude GPUs. Full run will need to tune batch size.
+**Key deviations from paper:** Paper uses 8×H200 with batch 32; we use 4×H100 with batch 64 to keep effective batch size = 256. All other hyperparameters match.
 
 ### Jobs
 
 | Job ID | Script | Submitted | Status | Notes |
 |--------|--------|-----------|--------|-------|
-| 157258 | submit_pretrain_varc_vit_geodude_smoketest.sh | 2026-04-22 | ✅ DONE | 2 geodude GPUs, batch 16, 3 epochs. ~42 min/epoch. eval_loss=0.327, eval_acc=0.034. Log: `slurm/varc_pretrain_smoke_157258.out` |
+| 22109856 | submit_pretrain_varc_vit_h100.sh | 2026-04-22 | ✅ Complete | 4×H100, ran all 100 epochs. Final val_acc=0.7788. Best val_acc=0.7812 at epoch 94. WandB run: `cwkfvy5p`. Log: `logs/varc_pretrain_22109856.out` |
 
 ---
 
@@ -73,7 +70,7 @@ batch 16 (effective 32) for 3 epochs to fit 24GB geodude GPUs. Full run will nee
 
 | Job ID | Script | Submitted | Status | Notes |
 |--------|--------|-----------|--------|-------|
-| TBD    | submit_ttt_arc1_vit_h100.sh | — | pending step 2 | 1×H100, tasks run sequentially (simpler, ~4× slower than original 8-GPU) |
+| 22231590 | submit_ttt_arc1_vit_h100.sh | 2026-04-24 | 🔄 Running | 1×H100, 2-day time limit, 400 tasks sequential. Checkpoint: `checkpoint_best.pt` (epoch 94). Output: `outputs/ARC_1_eval_ViT_attempt_0/`. Log: `logs/varc_ttt_arc1_22231590.out` |
 
 ---
 

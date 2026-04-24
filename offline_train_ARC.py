@@ -164,6 +164,10 @@ def train(args: argparse.Namespace) -> None:
         if args.wandb_run_name:
             wandb_kwargs["name"] = args.wandb_run_name
 
+        if args.wandb_id:
+            wandb_kwargs["id"] = args.wandb_id
+            wandb_kwargs["resume"] = "must"
+
         wandb_run = wandb.init(**wandb_kwargs)
         wandb.watch(model_for_eval, log=None)
 
@@ -321,6 +325,21 @@ def train(args: argparse.Namespace) -> None:
 
             if is_main_process:
                 print(" | ".join(log_parts))
+
+            if args.latest_save_path and is_main_process:
+                latest_path = Path(args.latest_save_path)
+                latest_path.parent.mkdir(parents=True, exist_ok=True)
+                latest_payload: Dict[str, Any] = {
+                    "model_state": model_for_eval.state_dict(),
+                    "config": vars(args),
+                    "epoch": epoch,
+                    "optimizer_state": optimizer.state_dict(),
+                }
+                if scheduler is not None:
+                    latest_payload["scheduler_state"] = scheduler.state_dict()
+                if scaler.is_enabled():
+                    latest_payload["scaler_state"] = scaler.state_dict()
+                torch.save(latest_payload, latest_path)
 
             if wandb_run is not None and is_main_process:
                 metrics = {
