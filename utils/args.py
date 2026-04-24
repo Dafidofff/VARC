@@ -44,7 +44,7 @@ def add_speed_optimizer_args(parser: argparse.ArgumentParser) -> None:
         "--compile-mode",
         type=str,
         default="reduce-overhead",
-        choices=("default", "reduce-overhead", "max-autotune"),
+        choices=("default", "reduce-overhead", "max-autotune", "max-autotune-no-cudagraphs"),
         help="torch.compile mode: 'default' (balanced), 'reduce-overhead' (faster), 'max-autotune' (slowest compile, fastest runtime).",
     )
     parser.add_argument("--no-amp", action="store_true", help="Disable automatic mixed precision training.")
@@ -86,6 +86,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--mlp-dim", type=int, default=512)
     parser.add_argument("--dropout", type=float, default=0.1)
     parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--grad-accum-steps", type=int, default=1, help="Number of gradient accumulation steps before an optimizer update.")
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--num-task-tokens", type=int, default=1, help="Number of task tokens to use in the model.")
     parser.add_argument("--lr-scheduler", type=str, default="cosine", choices=("none", "cosine"))

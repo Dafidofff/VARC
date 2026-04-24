@@ -1,4 +1,5 @@
 import argparse
+import contextlib
 import random
 import sys
 import time
@@ -181,24 +182,28 @@ def train(args: argparse.Namespace) -> None:
             train_exact = 0
             train_examples = 0
 
+            grad_accum_steps = getattr(args, "grad_accum_steps", 1)
             for step, batch in enumerate(train_loader, 1):
                 inputs = batch["inputs"].to(device)
                 attention_mask = batch["attention_mask"].to(device)
                 targets = batch["targets"].to(device)
                 task_ids = batch["task_ids"].to(device)
 
-                optimizer.zero_grad(set_to_none=True)
-                
-                # Use automatic mixed precision
-                with autocast(device_type=autocast_device_type, enabled=scaler.is_enabled()):
-                    logits = model(inputs, task_ids, attention_mask=attention_mask)
-                    num_colors = logits.size(1)
-                    logits_flat = logits.permute(0, 2, 3, 1).reshape(-1, num_colors)
-                    loss = F.cross_entropy(
-                        logits_flat,
-                        targets.view(-1),
-                        ignore_index=IGNORE_INDEX,
-                    )
+                is_accum_step = step % grad_accum_steps != 0 and step != total_batches
+                sync_ctx = model.no_sync() if (args.distributed and is_accum_step) else contextlib.nullcontext()
+
+                with sync_ctx:
+                    with autocast(device_type=autocast_device_type, enabled=scaler.is_enabled()):
+                        logits = model(inputs, task_ids, attention_mask=attention_mask)
+                        num_colors = logits.size(1)
+                        logits_flat = logits.permute(0, 2, 3, 1).reshape(-1, num_colors)
+                        loss = F.cross_entropy(
+                            logits_flat,
+                            targets.view(-1),
+                            ignore_index=IGNORE_INDEX,
+                        ) / grad_accum_steps
+
+                    scaler.scale(loss).backward()
 
                 batch_size = inputs.size(0)
 
@@ -214,18 +219,14 @@ def train(args: argparse.Namespace) -> None:
                     train_exact += int(is_exact)
                     train_examples += 1
 
-                # Backward pass with gradient scaling
-                scaler.scale(loss).backward()
-                
-                # Unscale gradients before clipping
-                scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
-                
-                # Optimizer step with scaler
-                scaler.step(optimizer)
-                scaler.update()
+                if not is_accum_step:
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                    scaler.step(optimizer)
+                    scaler.update()
+                    optimizer.zero_grad(set_to_none=True)
 
-                running_loss += loss.item() * batch_size
+                running_loss += loss.item() * grad_accum_steps * batch_size
                 sample_count += batch_size
 
                 if total_batches > 0 and is_main_process and step % 10 == 0:  # Update every 10 steps
