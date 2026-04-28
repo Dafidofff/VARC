@@ -29,6 +29,11 @@ for (( gpu=0; gpu<NUM_GPUS; gpu++ )); do
     i=0
     for file_name in "${file_names[@]}"; do
       if (( i % NUM_GPUS == gpu )); then
+        if [ -f "outputs/ARC_1_eval_ViT_attempt_0_attempt_0/${file_name}_predictions.json" ]; then
+          echo "GPU ${gpu} skipping ${file_name} (already done)"
+          i=$((i + 1))
+          continue
+        fi
         echo "GPU ${gpu} processing task ${file_name} (ARC-1 VARC-ViT)"
         CUDA_VISIBLE_DEVICES=${gpu} python test_time_train_ARC.py \
           --epochs 100 \
