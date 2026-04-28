@@ -52,7 +52,7 @@ for (( gpu=0; gpu<NUM_GPUS; gpu++ )); do
           --num-attempts 10 \
           --ttt-num-each 2
       fi
-      ((i++))
+      i=$((i + 1))
     done
   ) &
 done

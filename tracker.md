@@ -13,8 +13,8 @@
 |------|-------------|--------|
 | 1 | Build augmented TTT dataset (`augment_data.py`) | ✅ Done |
 | 2 | Offline pretraining of VARC-ViT (`submit_pretrain_varc_vit_h100.sh`) | ✅ Done |
-| 3 | Test-time training (TTT) for ARC-1 | 🔄 Running (job 22231590) |
-| 4 | Run analysis and generate HTML visualizations | ⏳ Pending |
+| 3 | Test-time training (TTT) for ARC-1 | ✅ Done (Pass@1: 52.56%) |
+| 4 | Run analysis and generate HTML visualizations | ✅ Done (`analysis_results_arc.html`) |
 
 ---
 
@@ -70,7 +70,57 @@ outputting per-task JSON files into `raw_data/ARC-AGI/eval_color_permute_ttt_9/`
 
 | Job ID | Script | Submitted | Status | Notes |
 |--------|--------|-----------|--------|-------|
-| 22231590 | submit_ttt_arc1_vit_h100.sh | 2026-04-24 | 🔄 Running | 1×H100, 2-day time limit, 400 tasks sequential. Checkpoint: `checkpoint_best.pt` (epoch 94). Output: `outputs/ARC_1_eval_ViT_attempt_0/`. Log: `logs/varc_ttt_arc1_22231590.out` |
+| 22231590 | submit_ttt_arc1_vit_h100.sh | 2026-04-24 | ❓ Unknown | Earlier TTT attempt. Log: `logs/varc_ttt_arc1_22231590.out` |
+| 22232893 | submit_ttt_arc1_vit_h100.sh | 2026-04-24 | ✅ Complete | 1×H100, all 400 tasks done. Output: `outputs/ARC_1_eval_ViT_attempt_0_attempt_{0,1}/`. Log: `logs/varc_ttt_arc1_22232893.out` |
+
+### TTT Results
+
+| Model | Checkpoint | Pretrain WandB ID | Pass@1 | Pass@2 | Oracle | Output dir | Tasks |
+|-------|------------|-------------------|--------|--------|--------|------------|-------|
+| VARC-ViT-18M | `saves/offline_train_ViT/checkpoint_best.pt` (epoch 94, val_acc=0.7812) | `cwkfvy5p` | **52.56%** | 55.90% | 66.15% | `outputs/ARC_1_eval_ViT_attempt_0_attempt_{0,1}/` | 400/400 |
+
+---
+
+---
+
+## Hyena Pretraining Experiments
+
+Parallel track exploring the Hyena architecture as a drop-in replacement for ViT.
+Architecture config: `cfg_hyena_varc_replica_adaln_patch1.py` (patch-size=1, AdaLN).
+Same effective batch size as ViT baseline: 4 GPUs × 16 batch × 4 grad-accum = 256.
+
+### Jobs
+
+| Job ID | Script | Submitted | Status | LR | Epochs | Notes |
+|--------|--------|-----------|--------|----|--------|-------|
+| 22232836 | submit_pretrain_hyena_performance.sh | 2026-04-24 | ❌ Cancelled | 3e-4 | 500 | Earlier exploratory run, wrong epoch count. |
+| 22234412 | submit_pretrain_hyena_performance_bs256.sh | 2026-04-24 | ❌ Cancelled | 3e-4 | 500 (ran 194) | Cancelled: cosine LR scheduler calibrated to 500 epochs, so LR barely decayed (still ~2.1e-4 at ep 194 instead of reaching 0). Checkpoints in `saves/offline_train_Hyena_bs256/` are not usable for TTT. |
+| 22255863 | submit_pretrain_hyena_100ep.sh | 2026-04-26 | ✅ Complete | 3e-4 | 100 | Fix of 22234412: 100 epochs so cosine schedule fully decays. Best val_acc=0.7596 at epoch ~95. Final val_acc=0.7500. WandB: `0q3e1yfe`. Log: `logs/varc_hyena_22255863.out` |
+| 22255864 | submit_pretrain_hyena_100ep_lr1e3.sh | 2026-04-26 | ✅ Complete | 1e-3 | 100 | LR sweep: 1e-3 (3× baseline). Best val_acc=0.8389. Final val_acc=0.8341. WandB: `lvzcb9v8`. Log: `logs/varc_hyena_22255864.out` |
+
+### Hyena Pretraining Results
+
+| Model | LR | WandB ID | Best val_acc | Final val_acc | Checkpoint |
+|-------|----|----------|-------------|---------------|------------|
+| Hyena (patch-size=1, AdaLN) | 3e-4 | `0q3e1yfe` | 75.96% | 75.00% | `saves/offline_train_Hyena_100ep/checkpoint_best.pt` |
+| Hyena (patch-size=1, AdaLN) | **1e-3** | `lvzcb9v8` | **83.89%** | **83.41%** | `saves/offline_train_Hyena_100ep_lr1e3/checkpoint_best.pt` |
+| *ViT baseline (reference)* | *1e-3* | *`cwkfvy5p`* | *78.12%* | *77.88%* | — |
+
+**Key finding:** LR=1e-3 yields +7.9pp over LR=3e-4, and beats the ViT baseline by +5.8pp in val_acc. Next step: run TTT on ARC-1 with the Hyena LR=1e-3 checkpoint.
+
+---
+
+## Hybrid Hyena/Attention (HHHA) Experiments
+
+Architecture: HHHA pattern (3 Hyena + 1 Attention, ×3 = 12 blocks), 384-dim, patch-size=2, 64×64 canvas.
+Config: `nvSubquadratic-private/examples/arc/cfg_hyena_varc_hhha.py`
+Branch: `feat/arc-agi-baseline` (includes merge of `origin/amoradzdeh/kan` for module updates)
+
+### Jobs
+
+| Job ID | Script | Submitted | Status | Notes |
+|--------|--------|-----------|--------|-------|
+| 22257382 | submit_arc_4gpu_h100.sh cfg_hyena_varc_hhha.py | 2026-04-26 | 🔄 Running | 4×H100, 100 epochs. WandB group: `arc_varc_hhha`. Log: `nvSubquadratic-private/logs/arc_4gpu_h100_22257382.out` |
 
 ---
 
