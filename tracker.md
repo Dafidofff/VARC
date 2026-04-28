@@ -1,8 +1,8 @@
 # VARC Baseline Run Tracker
 
-**Goal:** Reproduce the VARC-ViT-18M baseline on ARC-1 from scratch.  
+**Goal:** Reproduce the VARC-ViT-18M baseline on ARC-1 from scratch, and explore Hyena-ResNet as an alternative architecture.  
 **Model:** VARC-ViT-18M (18M params, depth=10, embed-dim=512, patch-size=2, image-size=64)  
-**Cluster env:** `nvsubq` conda env, SLURM (`gpu_h100` partition)  
+**Cluster env:** `nvsubq` conda env, SLURM (`capacity` partition)  
 **Effective batch size:** 4 GPUs × batch 64 = 256 (same as paper's 8×32)
 
 ---
@@ -24,25 +24,13 @@
 outputting per-task JSON files into `raw_data/ARC-AGI/eval_color_permute_ttt_9/` and
 `raw_data/ARC-AGI-2/eval_color_permute_ttt_9/`. These are required by the TTT step.
 
-**Script:** `augment_data.py` — runs `augment_raw_data_split_per_task` with 9 color permutations,
-`only_basic=True`, for both ARC-AGI and ARC-AGI-2 evaluation splits.
-
-**Submitted as:** SLURM job via `submit_augment_data.sh`
-
-### Jobs
-
-| Job ID | Script | Submitted | Status | Notes |
-|--------|--------|-----------|--------|-------|
-| —      | run interactively | 2026-04-22 | ✅ complete | ARC-AGI: 72s (400 tasks), ARC-AGI-2: 34s (120 tasks) — old cluster |
-| 157253 | submit_augment_data_geodude.sh | 2026-04-22 | ✅ complete | geodude cluster, ~61s. Log: `slurm/varc_augment_157253.out` |
-
 **Output locations:**
 - `raw_data/ARC-AGI/data/eval_color_permute_ttt_9/` — 400 task dirs ✅
 - `raw_data/ARC-AGI-2/data/eval_color_permute_ttt_9/` — 120 task dirs ✅
 
 ---
 
-## Step 2 — Offline pretraining VARC-ViT
+## Step 2a — Offline pretraining VARC-ViT
 
 **Script:** `submit_pretrain_varc_vit_h100.sh`  
 **Expected duration:** ~5h on 8×H200 → ~10.5h on 4×H100 (actual)  
@@ -59,9 +47,30 @@ outputting per-task JSON files into `raw_data/ARC-AGI/eval_color_permute_ttt_9/`
 
 ---
 
+## Step 2b — Offline pretraining Hyena-ResNet
+
+**Model:** Hyena-ResNet with circular FFT, patch-size=1, image-size=64 (intentionally longer sequences than ViT)  
+**Script:** `submit_pretrain_hyena_capacity.sh`  
+**Checkpoint:** `saves/offline_train_Hyena/checkpoint_best.pt` and `checkpoint_final.pt`  
+**WandB project:** `VisionARC`, run name `varc_hyena_geodude`  
+**Config:** `nvSubquadratic-private/examples/arc/cfg_hyena_rearc_subq_ops_patch1_circular_adaln.py`  
+**Effective batch size:** 8 GPUs × 16 = 128
+
+**Note:** `--no-compile` required — Hyena circular FFT uses complex64 which is incompatible with `torch.compile`.  
+**Note:** image-size 64 with patch-size 1 → 4096-token sequences (vs ViT's 1024).
+
+### Jobs
+
+| Job ID | Script | Submitted | Status | Notes |
+|--------|--------|-----------|--------|-------|
+| 244935 | submit_pretrain_hyena_geodude.sh | 2026-04-22 | ❌ crashed epoch 1 | `--image-size 32` too small: eval applies 2× scale → 60×60 grids exceed max_size=30. Fixed to `--image-size 64`. Log: `logs/varc_hyena_244935.out` |
+| 245699 | submit_pretrain_hyena_capacity.sh | 2026-04-23 | 🔄 running | Fixed image-size 64. 8×capacity GPUs, 500 epochs. |
+
+---
+
 ## Step 3 — Test-time training (TTT) for ARC-1
 
-**Script:** `script/test_time_training_VARC_ViT_ARC1.sh` (adapted for SLURM submission)  
+**Script:** `submit_ttt_arc1_vit_h100.sh` (adapt partition/GPUs as needed)  
 **Input:** `saves/offline_train_ViT/checkpoint_best.pt` + augmented TTT data from Step 1  
 **Output:** `outputs/ARC_1_eval_ViT/`  
 **Expected score:** 52–56 (per README)
@@ -78,8 +87,6 @@ outputting per-task JSON files into `raw_data/ARC-AGI/eval_color_permute_ttt_9/`
 | Model | Checkpoint | Pretrain WandB ID | Pass@1 | Pass@2 | Oracle | Output dir | Tasks |
 |-------|------------|-------------------|--------|--------|--------|------------|-------|
 | VARC-ViT-18M | `saves/offline_train_ViT/checkpoint_best.pt` (epoch 94, val_acc=0.7812) | `cwkfvy5p` | **52.56%** | 55.90% | 66.15% | `outputs/ARC_1_eval_ViT_attempt_0_attempt_{0,1}/` | 400/400 |
-
----
 
 ---
 
@@ -134,10 +141,10 @@ Branch: `feat/arc-agi-baseline` (includes merge of `origin/amoradzdeh/kan` for m
 ## Insights & Notes
 
 - The README mentions conda env `visarc`, but the actual working env on this cluster is `nvsubq`.
-- Geodude GPUs are ~24GB (vs 80GB H100). Batch 64 OOMs; batch 16 fits. Full run may need gradient accumulation or more GPUs.
-- Must set `export PATH="/usr/local/cuda-13.0/bin:$PATH"` in SLURM scripts — required for `torch.compile`/inductor to find `nvcc`.
 - Use `source ~/miniforge3/etc/profile.d/conda.sh` + `conda activate nvsubq` (not mamba.sh).
 - Augmentation only covers the **evaluation** split (used for TTT); training data is used as-is for offline pretraining.
-- TTT script (`script/test_time_training_VARC_ViT_ARC1.sh`) parallelizes over 8 GPUs inline — needs adaptation for single-node SLURM with 4 GPUs.
-- Sanity checks (`script/sanity_ARC1.sh`, `script/sanity_ARC2.sh`) run TTT on a single task and require `checkpoint_best.pt` — skip until after step 2.
+- TTT script (`script/test_time_training_VARC_ViT_ARC1.sh`) parallelizes over 8 GPUs inline — needs adaptation for single-node SLURM.
+- Sanity checks (`script/sanity_ARC1.sh`, `script/sanity_ARC2.sh`) run TTT on a single task and require `checkpoint_best.pt`.
 - Paper result range for ViT (no ensemble, ARC-1): **52–56** correct tasks.
+- `--image-size` must be ≥ 62 to support 2× resolution scale during eval on standard 30×30 ARC grids (need `max_size - 2 ≥ 60`). Use 64 for both ViT and Hyena.
+- Hyena `--no-compile` is mandatory (complex64 / circular FFT incompatible with inductor).
