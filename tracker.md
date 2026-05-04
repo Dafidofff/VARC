@@ -117,6 +117,52 @@ Same effective batch size as ViT baseline: 4 GPUs × 16 batch × 4 grad-accum = 
 
 ---
 
+## TTT Hyperparameter Ablation (Hyena, 50-task subset)
+
+All ablations use the Hyena LR=1e-3 checkpoint (`saves/offline_train_Hyena_100ep_lr1e3/checkpoint_best.pt`), evaluated on 50 fixed tasks. Output: `outputs/ttt_ablation/`.
+
+Scoring uses majority vote across all 510 stochastic forward passes (10 `--num-attempts` × 51 color permutations per attempt dir), merged across both attempt dirs. Use `scripts/score_ablation.py` to reproduce.
+
+| Ablation | LR | Scheduler | Epochs | Batch | Pass@1 | Pass@2 |
+|----------|----|-----------|--------|-------|--------|--------|
+| **lr1e3_const** | **1e-3** | **none** | **100** | **8** | **14/50 = 28.0%** | **17/50 = 34.0%** |
+| lr_5e4 | 5e-4 | cosine | 100 | 8 | 13/50 = 26.0% | 13/50 = 26.0% |
+| lr_1e3 | 1e-3 | cosine | 100 | 8 | 12/50 = 24.0% | 15/50 = 30.0% |
+| sched_const | 3e-4 | none | 100 | 8 | 12/50 = 24.0% | 15/50 = 30.0% |
+| baseline | 3e-4 | cosine | 100 | 8 | 8/50 = 16.0% | 10/50 = 20.0% |
+| ep_200 | 3e-4 | cosine | 200 | 8 | 7/50 = 14.0% | 11/50 = 22.0% |
+| bs_16 | 3e-4 | cosine | 100 | 16 | 4/50 = 8.0% | 6/50 = 12.0% |
+| ep_50 | 3e-4 | cosine | 50 | 8 | 2/50 = 4.0% | 4/50 = 8.0% |
+| **ViT baseline (same 50 tasks)** | — | — | — | — | **31/50 = 62.0%** | **33/50 = 66.0%** |
+
+**Key finding:** `lr1e3_const` is the best Hyena config at **28% Pass@1**, but ViT scores **62% Pass@1** on the same tasks — a gap of **−34pp**. Despite Hyena's higher pretraining val_acc (83.89% vs 78.12%), it TTTs far less effectively than ViT. Earlier numbers in this table were wrong (used raw attempt order instead of majority vote, and did not include a real ViT comparison). This config is used for the full run `submit_ttt_arc1_hyena_lr1e3_const.sh`.
+
+| 248315 | submit_pretrain_hyena_100ep_lr1e3_patch2.sh | 2026-04-28 | ❌ Cancelled | Replaced by 248318 (8-GPU). |
+| 248318 | submit_pretrain_hyena_100ep_lr1e3_patch2.sh | 2026-04-28 | ❌ Cancelled | Cancelled to free GPUs for TTT hparam ablation (see program.md). TODO: resubmit after ablation. |
+| 248321 | submit_pretrain_hyena_100ep_lr1e3_patch2_4gpu.sh | 2026-04-28 | ❌ Cancelled | Cancelled to free GPUs for TTT hparam ablation. TODO: resubmit after ablation. |
+
+### Hyena TTT — ARC-1 (hipster cluster)
+
+| Job ID | Script | Submitted | Status | Notes |
+|--------|--------|-----------|--------|-------|
+| 248200 | submit_ttt_arc1_hyena_h100.sh (array 0-7) | 2026-04-28 | ❌ Failed | Bug: `task_token_embed.weight` key hardcoded in `load_model.py`, wrong for Hyena. |
+| 248208 | submit_ttt_arc1_hyena_h100.sh (array 0-7) | 2026-04-28 | ❌ Failed | Bug: `torch.compile` inductor crashes on `complex64` (circular FFT) on L4 GPUs. |
+| 248237 | submit_ttt_arc1_hyena_h100.sh (array 0-7) | 2026-04-28 | ✅ Complete | 8×1 L4 GPU (capacity), 50 tasks/job, `--no-compile`, LR=3e-4 cosine. Output: `outputs/ARC_1_eval_Hyena_lr1e3_attempt_0_attempt_{0,1}/`. |
+| 249019 | submit_ttt_arc1_hyena_lr1e3_const.sh (array 0-39) | 2026-04-30 | ✅ Complete | 40×1 RTX6000Ada (performance), 10 tasks/job, LR=1e-3 constant. Output: `outputs/ARC_1_eval_Hyena_lr1e3_const_attempt_0_attempt_{0,1}/`. |
+
+**Final results — all 400 tasks (scored with majority vote across both attempt dirs):**
+
+| Job | Config | Tasks done | Hyena Pass@1 | Hyena Pass@2 | ViT Pass@1 (all 400) | ViT Pass@2 (all 400) | Delta Pass@1 vs ViT |
+|-----|--------|-----------|-------------|-------------|----------------------|----------------------|---------------------|
+| 248237 (capacity) | LR=3e-4, cosine (baseline) | 400/400 | 55/400 = **13.75%** | 68/400 = **17.00%** | 210/400 = **52.56%** | 224/400 = **55.90%** | **−38.8pp** |
+| 249019 (performance) | LR=1e-3, constant | 400/400 | 74/400 = **18.50%** | 88/400 = **22.00%** | 210/400 = **52.56%** | 224/400 = **55.90%** | **−34.1pp** |
+
+**Fixes applied to `utils/load_model.py`:**
+- Added `_find_task_embed_key()` to detect task embedding key by architecture (Hyena uses `arc_resnet.embedding.task_embed.weight`, ViT uses `task_token_embed.weight`).
+- Removed ViT-only `model.task_token_embed.weight` attribute access from the except handler.
+
+---
+
 ## Hybrid Hyena/Attention (HHHA) Experiments
 
 Architecture: HHHA pattern (3 Hyena + 1 Attention, ×3 = 12 blocks), 384-dim, patch-size=2, 64×64 canvas.
