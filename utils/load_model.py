@@ -46,6 +46,14 @@ def get_model_arch(args, train_dataset):
 
 
 # Resume from checkpoint if specified
+def _find_task_embed_key(state_dict: Dict[str, Any]) -> Optional[str]:
+    """Return the state-dict key for the task embedding, regardless of architecture."""
+    for candidate in ("task_token_embed.weight", "arc_resnet.embedding.task_embed.weight"):
+        if candidate in state_dict:
+            return candidate
+    return None
+
+
 def load_models(args, train_dataset, device, distributed, rank, local_rank):
     resume_checkpoint = getattr(args, "resume_checkpoint", None)
     resume_reset_epoch = bool(getattr(args, "resume_reset_epoch", False))
@@ -55,14 +63,15 @@ def load_models(args, train_dataset, device, distributed, rank, local_rank):
         print(f"Resuming from checkpoint: {resume_checkpoint}")
         checkpoint = torch.load(resume_checkpoint, map_location=device)
         model = get_model_arch(args, train_dataset)
-    
+
         state_dict = checkpoint.get("model_state", {})
         state_dict = {
             key.replace("_orig_mod.", "", 1): value
             for key, value in checkpoint["model_state"].items()
         }
-        if args.resume_skip_task_token and "task_token_embed.weight" in state_dict:
-            state_dict = {k: v for k, v in state_dict.items() if k != "task_token_embed.weight"}
+        task_embed_key = _find_task_embed_key(state_dict)
+        if args.resume_skip_task_token and task_embed_key is not None:
+            state_dict = {k: v for k, v in state_dict.items() if k != task_embed_key}
             missing, unexpected = model.load_state_dict(state_dict, strict=False)
             if missing:
                 print(f"Skipped loading parameters: {sorted(missing)}")
@@ -72,15 +81,9 @@ def load_models(args, train_dataset, device, distributed, rank, local_rank):
             try:
                 model.load_state_dict(state_dict)
             except RuntimeError as exc:
-                checkpoint_weight = state_dict.get("task_token_embed.weight")
-                current_weight = model.task_token_embed.weight
-                if (
-                    checkpoint_weight is not None
-                    and checkpoint_weight.shape != current_weight.shape
-                    and not args.resume_skip_task_token
-                ):
+                if task_embed_key is not None and not args.resume_skip_task_token:
                     raise RuntimeError(
-                        "Mismatch in task_token_embed.weight shape. "
+                        "Mismatch in task embedding shape. "
                         "Re-run with --resume-skip-task-token to reuse other weights."
                     ) from exc
                 raise
@@ -189,14 +192,15 @@ def load_model_only(args, train_dataset, device, distributed, rank, local_rank):
         print(f"Resuming from checkpoint: {resume_checkpoint}")
         checkpoint = torch.load(resume_checkpoint, map_location=device)
         model = get_model_arch(args, train_dataset)
-    
+
         state_dict = checkpoint.get("model_state", {})
         state_dict = {
             key.replace("_orig_mod.", "", 1): value
             for key, value in checkpoint["model_state"].items()
         }
-        if args.resume_skip_task_token and "task_token_embed.weight" in state_dict:
-            state_dict = {k: v for k, v in state_dict.items() if k != "task_token_embed.weight"}
+        task_embed_key = _find_task_embed_key(state_dict)
+        if args.resume_skip_task_token and task_embed_key is not None:
+            state_dict = {k: v for k, v in state_dict.items() if k != task_embed_key}
             missing, unexpected = model.load_state_dict(state_dict, strict=False)
             if missing:
                 print(f"Skipped loading parameters: {sorted(missing)}")
@@ -206,15 +210,9 @@ def load_model_only(args, train_dataset, device, distributed, rank, local_rank):
             try:
                 model.load_state_dict(state_dict)
             except RuntimeError as exc:
-                checkpoint_weight = state_dict.get("task_token_embed.weight")
-                current_weight = model.task_token_embed.weight
-                if (
-                    checkpoint_weight is not None
-                    and checkpoint_weight.shape != current_weight.shape
-                    and not args.resume_skip_task_token
-                ):
+                if task_embed_key is not None and not args.resume_skip_task_token:
                     raise RuntimeError(
-                        "Mismatch in task_token_embed.weight shape. "
+                        "Mismatch in task embedding shape. "
                         "Re-run with --resume-skip-task-token to reuse other weights."
                     ) from exc
                 raise

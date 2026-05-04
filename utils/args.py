@@ -138,5 +138,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--fix-scale-factor", type=int, default=1)
     parser.add_argument('--num-attempts', type=int, default=10, help="Number of attempts per evaluation example.")
     parser.add_argument('--eval-save-name', type=str, default=None, help="Name for saving evaluation predictions.")
-    
+    parser.add_argument(
+        '--freeze-hyena-filters',
+        action='store_true',
+        help="Freeze Hyena conv filter weights (global_conv.kernel, short_conv) during TTT, "
+             "leaving FFN, projections, and norms trainable.",
+    )
+
     return parser.parse_args()

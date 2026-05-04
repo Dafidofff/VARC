@@ -198,7 +198,19 @@ def train(args: argparse.Namespace) -> None:
     model_original = load_model_only(
         args=args, train_dataset=train_dataset, device=device, distributed=distributed, rank=rank, local_rank=local_rank
     )
-    
+
+    if getattr(args, 'freeze_hyena_filters', False):
+        frozen, total = 0, 0
+        for name, p in model_original.named_parameters():
+            total += 1
+            # Freeze the Hyena conv filter parameters: global conv kernel network and short conv weights.
+            # Projections (qkv_proj, out_proj), FFN (mlp), norms, and embeddings remain trainable.
+            if 'global_conv.kernel' in name or 'short_conv.weight' in name or 'global_conv.shortcut' in name:
+                p.requires_grad_(False)
+                frozen += 1
+        if (not distributed) or rank == 0:
+            print(f"[freeze-hyena-filters] Froze {frozen}/{total} parameter tensors (Hyena conv filters).")
+
     for attempt_idx in range(args.ttt_num_each):
         model = deepcopy(model_original)
         print(f"Starting test-time training attempt {attempt_idx + 1}/{args.ttt_num_each}...")
