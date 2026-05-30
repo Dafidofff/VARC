@@ -8,3 +8,6 @@ saves/
 outputs/
 wandb/
 logs/
+
+# autoresearch experiment log (per-run, do not commit)
+results.tsv
