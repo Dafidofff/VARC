@@ -4,9 +4,9 @@
 #SBATCH --job-name=ttt_autores_base
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
+#SBATCH --cpus-per-task=16
 #SBATCH --time=0-04:00:00
-#SBATCH --mem=64G
+#SBATCH --mem=32G
 #SBATCH --output=logs/ttt_autores_baseline_%A_%a.out
 #SBATCH --array=0-24
 
@@ -17,7 +17,9 @@
 # Evaluated on the fixed 100-task subset (50 original ablation tasks + 50 more)
 # to cut the high variance that misled the earlier 50-task screen.
 # 25-way array, STRIDE=25 -> 4 tasks/job, fits the 4h wall limit. Skip-if-done
-# makes requeue safe. Score with: python scripts/score_one.py ttt_autores/baseline
+# makes requeue safe. cpus-per-task=16 (capacity floor = 16 CPU/GPU) -> 16 of 25
+# jobs concurrent under the 256-CPU cap (~2 waves, ~6.6h, vs ~13h at 32 CPUs).
+# Score with: python scripts/score_one.py ttt_autores/baseline
 
 echo "TTT autores baseline array ${SLURM_ARRAY_TASK_ID}/24 on ${SLURM_NODELIST}"
 echo "Start: $(date)"
