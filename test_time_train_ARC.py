@@ -70,6 +70,18 @@ def ttt_once(model, device, distributed, rank, train_loader, train_sampler, eval
                         ignore_index=IGNORE_INDEX,
                     )
 
+                # NaN guard (kept as standing baseline from exp#12): some ARC-1 TTT tasks spike
+                # to a non-finite loss mid-training. Once that propagates through backward into
+                # the optimizer the weights are corrupted and every remaining epoch is wasted.
+                # Skip the backward/step for any non-finite batch so the NaN never reaches the
+                # optimizer; training continues from the last good state. (AMP's GradScaler only
+                # guards gradient overflow, not a loss already NaN from the forward pass.)
+                # NOTE: alone this scored 35.25% on 400 (vs 36.25% unguarded) -- kept for
+                # correctness/robustness, not as a score win; future experiments build on it.
+                if not torch.isfinite(loss):
+                    optimizer.zero_grad(set_to_none=True)
+                    continue
+
                 batch_size = inputs.size(0)
                 predictions = logits.argmax(dim=1)
                 for idx in range(batch_size):

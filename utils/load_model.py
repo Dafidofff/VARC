@@ -167,11 +167,34 @@ def load_models(args, train_dataset, device, distributed, rank, local_rank):
 
 
 def load_optimizer(args, model, device, distributed, rank):
-    optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=args.learning_rate,
-        weight_decay=args.weight_decay,
-    )
+    lr_light_mult = getattr(args, "lr_light_mult", 1.0)
+    if lr_light_mult == 1.0:
+        optimizer = torch.optim.AdamW(
+            model.parameters(),
+            lr=args.learning_rate,
+            weight_decay=args.weight_decay,
+        )
+    else:
+        # Decoupled TTT LR: the "mixer" (heavy compute) stays at base LR; the "light path"
+        # (embeddings/norms/condition_proj/readout) trains at base LR * lr_light_mult.
+        # Patterns match the freeze-mixer set.
+        mixer_patterns = ("global_conv", "short_conv", "qkv", "in_proj", "out_proj", "mlp")
+        mixer_params, light_params = [], []
+        for name, p in model.named_parameters():
+            if not p.requires_grad:
+                continue
+            (mixer_params if any(pat in name for pat in mixer_patterns) else light_params).append(p)
+        optimizer = torch.optim.AdamW(
+            [
+                {"params": mixer_params, "lr": args.learning_rate},
+                {"params": light_params, "lr": args.learning_rate * lr_light_mult},
+            ],
+            lr=args.learning_rate,
+            weight_decay=args.weight_decay,
+        )
+        if (not distributed) or rank == 0:
+            print(f"[lr-light-mult={lr_light_mult}] mixer={len(mixer_params)} @ {args.learning_rate:g}, "
+                  f"light={len(light_params)} @ {args.learning_rate * lr_light_mult:g}")
 
     scaler = GradScaler(enabled=(device.type == "cuda" and not args.no_amp))
     if (not distributed) or rank == 0:

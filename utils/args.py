@@ -97,6 +97,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-task-tokens", type=int, default=1, help="Number of task tokens to use in the model.")
     parser.add_argument("--lr-scheduler", type=str, default="cosine", choices=("none", "cosine"))
     parser.add_argument("--learning-rate", type=float, default=3e-4)
+    # Decoupled TTT LR: light path (embeddings/norms/condition_proj/readout) trains at
+    # learning_rate * lr_light_mult; mixer (global_conv/short_conv/qkv/in/out_proj/mlp)
+    # stays at learning_rate. 1.0 = single group (unchanged). 2.0 NaN'd; 1.5 trains but
+    # NaN'd ~22/100 unguarded -- now paired with the NaN-guard in exp#15.
+    parser.add_argument("--lr-light-mult", type=float, default=1.0)
     parser.add_argument("--weight-decay", type=float, default=0)
     parser.add_argument("--max-grad-norm", type=float, default=1.0)
     parser.add_argument("--num-workers", type=int, default=0)
