@@ -19,6 +19,47 @@ searches that space.
 
 ---
 
+## Diagnostic findings — why p=2 caps at ~36% (2026-06-02)
+
+After the recipe search saturated (all of LR/schedule/epochs/freeze/ensemble/aug
+matched or lost to the 36.25% baseline), two **zero-GPU** diagnostics off existing
+predictions + logs were run to ask *why*. Both point away from the original
+"over-specialization" framing and toward an **under-fitting / adaptation-capacity**
+bottleneck. Reproduce with `scripts/diag_overlap.py` and `scripts/diag_supportfit.py`.
+
+**1. ViT-vs-Hyena per-task overlap (full 400, Pass@1):** Hyena solves are *mostly a
+subset* of ViT's — 120 both, 83 ViT-only, **only 18 Hyena-only** (13% of Hyena's
+solves). Not the "different-but-equally-good solution" that over-specialization
+predicts; it's a broad capacity gap with a small complementary tail.
+- *Side effect:* oracle ViT+Hyena ensemble ceiling = **56.7% P@1 / 61.5% P@2** (+4.6/+6pp
+  over ViT) — real, but out of scope for this loop (changes the checkpoint).
+
+**2. Support-fit vs test verdict (baseline + full-400 logs):** cross-tab of final
+TTT *support-set* accuracy against the held-out-*test* verdict.
+
+| | CORRECT tasks | WRONG tasks |
+|---|---|---|
+| median support-acc | **0.92–0.93** | **0.73–0.80** |
+| fully-fit support (≥0.99) → | 73–75% CORRECT | only 4–9% of WRONG tasks fit support |
+
+The memorize-but-fail signature of over-specialization (fit support → fail test) is
+**rare**. The dominant failure is the opposite: on ~⅔ of WRONG tasks TTT **never even
+reproduces the train pairs**. The model under-adapts.
+
+**Why every prior knob failed, in hindsight:** freeze / cosine / weight-decay / smaller
+light-LR all *reduce* adaptation; the problem is *too little* adaptation. `freeze-mixer`
+≈ baseline showed the Hyena mixer is functionally inert during TTT — only the light path
+(AdaLN cond_proj + norms + readout) adapts, and that path lacks the capacity to fit the
+support transform for the harder ⅔. More epochs (150) hurt because flat extra steps
+overfit the already-fit easy tasks while barely helping the under-fit hard ones.
+
+**Redirect:** the open lever is *increasing test-time fitting capacity on the spatial
+mixer without the instability of full fine-tuning* — e.g. low-rank/LoRA adapters on the
+Hyena in/out projections, or a per-task adaptive epoch budget (train-to-support-plateau,
+early-stop the easy tasks). The flat-recipe search space is exhausted.
+
+---
+
 ## Setup
 
 To start a run, work with the user to:
