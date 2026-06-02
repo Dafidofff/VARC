@@ -58,6 +58,16 @@ mixer without the instability of full fine-tuning* — e.g. low-rank/LoRA adapte
 Hyena in/out projections, or a per-task adaptive epoch budget (train-to-support-plateau,
 early-stop the easy tasks). The flat-recipe search space is exhausted.
 
+**CONFIRMED (2026-06-02): the capacity lever works.** `film_freeze` (exp#14) — TTT on the
+BlockDiag+**FiLM**+AdaLN p=2 checkpoint, which adds feature-wise conditioning capacity to
+the adapting path — scored **43.25% Pass@1 / 48.0% Pass@2 on the full 400** (173/192 of 400),
+the loop's **first confirmed win**: +7.0/+6.5pp over the 36.25%/41.5% baseline, shrinking the
+ViT gap from −16pp to −7.7pp. Meanwhile exp#16 (global LR 1.5e-3 + guard) scored 40% screen,
+closing the LR axis (7e-4=39, 1e-3=42, 1.5e-3=40, 2e-3=26 → 1e-3 optimal). Together these
+confirm the diagnosis: the bottleneck is *conditioning capacity*, not step-size. New
+best-so-far: screen 49%, confirmed 43.25%. Next: isolate FiLM-ckpt vs freeze (run FiLM
+*unfrozen* on 400), then push capacity further (LoRA on mixer projections, richer FiLM).
+
 ---
 
 ## Setup
