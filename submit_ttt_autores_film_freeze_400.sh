@@ -9,6 +9,7 @@
 #SBATCH --mem=32G
 #SBATCH --output=logs/ttt_autores_film_freeze_400_%A_%a.out
 #SBATCH --array=0-39
+#SBATCH --exclude=hipster-cn011  # broken node: /local_scratch container ns missing -> launch failures
 
 # 400-task CONFIRMATION of experiment #14 (film_freeze).
 # The 100-task screen scored 49.0% Pass@1 / 56.0% Pass@2 -- the best screen by +6pp,

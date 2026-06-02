@@ -9,6 +9,7 @@
 #SBATCH --mem=32G
 #SBATCH --output=logs/ttt_autores_guard_lr1p5e3_%A_%a.out
 #SBATCH --array=0-24
+#SBATCH --exclude=hipster-cn011  # broken node: /local_scratch container ns missing -> launch failures
 
 # Autoresearch experiment #16 — GLOBAL LR 1.5e-3 with the standing NaN-guard.
 # Motivated by the under-fitting diagnosis (scripts/diag_supportfit.py): WRONG tasks
