@@ -65,8 +65,15 @@ the loop's **first confirmed win**: +7.0/+6.5pp over the 36.25%/41.5% baseline, 
 ViT gap from −16pp to −7.7pp. Meanwhile exp#16 (global LR 1.5e-3 + guard) scored 40% screen,
 closing the LR axis (7e-4=39, 1e-3=42, 1.5e-3=40, 2e-3=26 → 1e-3 optimal). Together these
 confirm the diagnosis: the bottleneck is *conditioning capacity*, not step-size. New
-best-so-far: screen 49%, confirmed 43.25%. Next: isolate FiLM-ckpt vs freeze (run FiLM
-*unfrozen* on 400), then push capacity further (LoRA on mixer projections, richer FiLM).
+best-so-far: screen 49%, confirmed 43.25%.
+
+**Follow-up (exp#17, 2026-06-03): freeze/unfreeze is a wash; the FiLM ckpt is the lever.**
+FiLM *unfrozen* screened 51% (> frozen 49%) but confirmed **42.75% on 400** — a statistical
+tie with frozen 43.25% (the 51>49 screen lead was subset noise yet again). So the +7pp win
+is the **FiLM checkpoint itself**, now confirmed by TWO independent 400-runs (43.25% + 42.75%);
+freezing the filters neither helps nor hurts at scale. Best confirmed stays film_freeze 43.25%.
+Next, push capacity further *without re-pretraining*: LoRA/low-rank adapters on the Hyena
+in/out projections (more test-time fitting capacity on the part the under-fit dx implicates).
 
 ---
 
