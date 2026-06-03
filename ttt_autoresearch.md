@@ -198,6 +198,32 @@ The loop runs until the human interrupts.
 
 Ordered roughly by expected value / cost. Cross off as tried; the loop is free to deviate.
 
+### Phase 2 — re-ablate the standard hparams on the NEW best ckpt (FiLM+BlockDiag p=2, 42.75–43.25%)  ← CURRENT FOCUS
+
+The Phase-1 sweep (items 1–7 below) was all on the **BlockDiag baseline** (36%, under-fitting
+regime). The best ckpt is now FiLM+BlockDiag, where the bottleneck shifted toward the
+fit/generalize balance (see the "what unlocked it" analysis: BlockDiag regularizes FiLM's
+capacity). So those nulls do **not** necessarily transfer — re-run them here. Base recipe =
+`film_unfrozen` (FiLM+BlockDiag ckpt, unfrozen, lr1e3_const). Harness:
+`submit_ttt_autores_film_sweep.sh` (parameterized via `sbatch --export=ALL,SWEEP_NAME=..,LR=..`).
+
+- **P0 (definite): LR sweep** — `LR ∈ {7e-4, 1.5e-3, 2e-3}` vs the 1e-3 base.
+- **P0 (definite): schedule** — `SCHED=cosine` vs constant.
+- **P1: weight-decay** — `WD=1e-2`.
+- **P1: num-attempts** — `NUM_ATTEMPTS=20` (ensembling; failed on baseline, but a better-
+  generalizing model may now benefit from more vote diversity).
+- **P1: epochs** — `EPOCHS ∈ {50, 150, 200}` (fit dynamics differ from baseline).
+- **P2: batch size** — `BATCH ∈ {16, 32}`.
+
+### Phase 3 — capacity (mid priority, after Phase 2)
+
+- **LoRA / low-rank adapters on the Hyena in/out projections.** Adds *constrained* test-time
+  fitting capacity on the spatial mixer — the lever the under-fit diagnosis implicates, and a
+  controllable version of what BlockDiag+FiLM achieved structurally. Needs code: a `--lora-rank`
+  flag + adapter injection into the mixer projections during TTT. Sweep rank ∈ {4, 8, 16}.
+
+### Phase 1 — original backlog (done, on the BlockDiag baseline; kept for reference)
+
 1. **Baseline:** unfrozen `lr1e3_const` on BlockDiag p=2 (screen first; 400 = 36.25%, known).
 2. **`--num-attempts` 10 → 20/30.** Pure majority-vote ensembling, linear cost, usually +2–4pp.
    Cheapest credible win; likely to survive the 400-confirm since it just adds vote diversity.
