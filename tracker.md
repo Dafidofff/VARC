@@ -31,23 +31,22 @@ Hyena runs require `--no-compile` (circular FFT uses complex64, incompatible wit
 
 | Job | Architecture | Patch | LR | Sched | Best eval_acc | WandB | Checkpoint |
 |-----|--------------|-------|----|-------|--------------|-------|------------|
-| 22255864 | Hyena circular AdaLN | 1 | **1e-3** | cosine | **83.89%** | `lvzcb9v8` | `saves/offline_train_Hyena_100ep_lr1e3/` |
-| 268829 | Hyena **BlockDiag-ω₀** circular AdaLN | 2 | 1e-3 | cosine | **82.93%** | `r1kbefxu` | `saves/offline_train_Hyena_patch2_blockdiag_lr1e3/` |
+| 277654 | Hyena **BlockDiag-ω₀** circular AdaLN | 1 | 1e-3 | cosine | **86.06%** | `jja2loqy` | `saves/offline_train_Hyena_patch1_blockdiag_lr1e3/` |
+| 22255864 | Hyena circular AdaLN | 1 | **1e-3** | cosine | 83.89% | `lvzcb9v8` | `saves/offline_train_Hyena_100ep_lr1e3/` |
+| 268829 | Hyena **BlockDiag-ω₀** circular AdaLN | 2 | 1e-3 | cosine | 82.93% | `r1kbefxu` | `saves/offline_train_Hyena_patch2_blockdiag_lr1e3/` |
+| 277655 | Hyena **BlockDiag-ω₀ + FiLM + AdaLN** | 2 | 1e-3 | cosine | 81.49% | `r3xw5fz5` | `saves/offline_train_Hyena_patch2_blockdiag_film_lr1e3/` |
 | 22109856 | **ViT-18M** (attention baseline) | 2 | 1e-3 | cosine | 78.12% | `cwkfvy5p` | `saves/offline_train_ViT/` |
 | 22255863 | Hyena circular AdaLN | 1 | 3e-4 | cosine | 75.96% | `0q3e1yfe` | `saves/offline_train_Hyena_100ep/` |
 | 268830 | Hyena **FiLM-kernel** circular AdaLN | 2 | 1e-3 | cosine | 74.28% | — | `saves/offline_train_Hyena_patch2_film_lr1e3/` |
 
-**In flight (queued on `performance`, submitted 2026-05-29):**
-
-| Job | Architecture | Patch | GPUs | Notes |
-|-----|--------------|-------|------|-------|
-| 277654 | Hyena BlockDiag-ω₀ | 1 | 8×rtx_6000_ada | Isolates patch size vs kernel type (p=1 BlockDiag vs p=2 BlockDiag). Resubmit of 274092 (died at epoch 14, node fault — was training fine, eval_acc 0.526 climbing). |
-| 277655 | Hyena BlockDiag-ω₀ + FiLM + AdaLN (all three) | 2 | 4×rtx_6000_ada | Resubmit of 274341 with `--no-compile` added (original crashed in 56s on `complex64` inductor error). |
+Both 2026-05-29 in-flight runs are now **done** (folded into the table above):
+277654 p1-BlockDiag finished 2026-06-03 (COMPLETED, 100 ep, 1d 22h) at **86.06%** — the new highest-pretrain-accuracy run of any architecture; 277655 BlockDiag+FiLM+AdaLN p=2 finished 2026-06-01 at 81.49%.
 
 **Pretraining conclusions:**
 - **LR=1e-3 beats 3e-4 by +7.9pp** (83.89% vs 75.96%, patch=1). 1e-3 is the standard for all subsequent runs.
-- BlockDiag p=2 (82.93%) and patch=1 (83.89%) both clear the ViT baseline (78.12%); they are essentially tied on pretraining accuracy despite very different sequence lengths.
-- FiLM-kernel underperforms BlockDiag by −8.6pp and never closes the gap — FiLM SIREN modulation does not help in this setup.
+- **BlockDiag-ω₀ is the best kernel at both patch sizes.** p=1 BlockDiag (86.06%) > plain p=1 AdaLN (83.89%); p=2 BlockDiag (82.93%) clears the ViT baseline (78.12%). Swapping in the BlockDiag kernel adds ~+2pp on top of plain AdaLN at p=1.
+- **Patch=1 > patch=2 on pretrain accuracy** (86.06% vs 82.93% for BlockDiag), but recall pretrain acc has been *anti-correlated* with TTT for Hyena — see TTT section. **RESOLVED (job 283580): the record 86.06% pretrain did NOT translate** — p1-BlockDiag TTTs to only **38.50% Pass@1 / 41.75% Pass@2** on the full 400, *below* the p=2 FiLM ckpt's 43.25%. The anti-correlation holds: highest pretrain acc of any run → still −13.6pp under ViT. Confirms the bottleneck is the TTT-adaptation path, not pretrain quality.
+- FiLM-kernel underperforms BlockDiag by −8.6pp; adding FiLM *on top of* BlockDiag (81.49%) also slightly *lowers* pretrain acc vs plain BlockDiag p=2 (82.93%). FiLM SIREN modulation does not help in this setup.
 
 ---
 
@@ -64,6 +63,7 @@ Per-experiment hyperparameter search lives in [ttt_autoresearch.md](ttt_autorese
 | 249019 | Hyena circular AdaLN | 1 | 83.89% | LR=1e-3 const | 18.50% (74) | 22.00% (88) | −34.1pp |
 | 248237 | Hyena circular AdaLN | 1 | 83.89% | LR=3e-4 cosine | 13.75% (55) | 17.00% (68) | −38.8pp |
 | 277241 | Hyena BlockDiag-ω₀ + **freeze-filters** | 2 | 82.93% | LR=1e-3 const, frozen conv | **36.00%** (144) | 38.50% (154) | **−16.6pp** |
+| 283580 | Hyena **BlockDiag-ω₀** (pretrain record) | 1 | **86.06%** | LR=1e-3 const | 38.50% (154) | 41.75% (167) | **−13.6pp** |
 
 **Core finding — Hyena is TTT-adaptation-limited, not capacity-limited.**
 Pretrain val_acc and TTT Pass@1 are *anti-correlated* for Hyena: patch=1 has the highest pretrain acc (83.89%) but TTTs worst (18.5%); BlockDiag p=2 has slightly lower pretrain acc (82.93%) yet nearly doubles TTT (36.25%). The driver of TTT performance is the **BlockDiag ω₀ spectrum**, not raw eval_acc. The filters over-specialize during offline pretraining in a way ~100 TTT epochs cannot undo.
@@ -131,7 +131,7 @@ The central problem is now treated as **TTT hyperparameter search on the BlockDi
 - **277654 / 277655** — p=1 BlockDiag and p=2 BlockDiag+FiLM pretrains (queued); feed new TTT candidates.
 - **Re-run the hparam ablation on BlockDiag p=2** — the `lr1e3_const` recipe was tuned on p=1; patch=2 has 4× fewer tokens and higher gradient SNR. Probe batch ∈ {16,32}, epochs ∈ {50,200}, and (needs new flag) a decoupled filter LR.
 - **Increase `--num-attempts` 10 → 20–30** — pure majority-vote ensembling, linear cost, typically +2–4pp.
-- **TTT from an earlier pretrain checkpoint** — directly tests the over-specialization hypothesis.
+- **TTT from an earlier pretrain checkpoint** — directly tests the over-specialization hypothesis. Driven by the **snapshot pretrain** job [submit_pretrain_hyena_p2_blockdiag_snapshots.sh](submit_pretrain_hyena_p2_blockdiag_snapshots.sh): re-pretrains BlockDiag p=2 and dumps `checkpoint_epoch{20,40,60,80}.pt` into `saves/offline_train_Hyena_patch2_blockdiag_lr1e3_snap/` so each can be TTT'd separately. **First attempt 280253 crashed in 14s** — the `--periodic-save-dir`/`--save-epochs` flags it passed did not exist in the pipeline (see pitfalls). **Fixed 2026-06-03** (flags added to `utils/args.py`, snapshot save wired into the epoch loop in `offline_train_ARC.py`); ready to resubmit once `performance` CPU quota frees up (blocked behind 277654 by `QOSMaxCpuPerUserLimit`).
 - **Geometric augmentation during TTT** — TTT currently uses `eval_color_permute_ttt_9` (color only); add on-the-fly transpose/rotate/flip to match what ViT sees at pretrain time.
 - **Param-match** — BlockDiag p=2 is ~24.4M vs ViT 18M; trim depth/embed-dim for a clean comparison.
 - **HHHA hybrid (22257382)** — 3-Hyena + 1-Attention, submitted 2026-04-26; status stale, **needs checking** before any follow-up.
@@ -147,6 +147,7 @@ These caused crashed/wasted runs; recorded here so they aren't repeated. The ind
 - **Cosine schedule must match the actual epoch count.** A 500-epoch cosine run stopped at ~194 epochs barely decayed the LR (~2.1e-4 instead of →0), making the checkpoint useless for TTT. Set epochs to what you actually intend to run (100).
 - **Configs must live in `nvSubquadratic-private/varc_configs/`**, not in `examples/arc/` — the latter gets wiped by nvSubq branch switches, and configs placed inside the VARC tree aren't found by `_ensure_nvsubq_on_path`. GPFS stale cache has also silently dropped config dirs; verify the config path exists before submitting.
 - **TTT checkpoint loading is architecture-specific.** `utils/load_model.py` detects the task-embedding key by architecture via `_find_task_embed_key()` (Hyena: `arc_resnet.embedding.task_embed.weight`; ViT: `task_token_embed.weight`). The old ViT-only hardcoded key broke Hyena TTT.
+- **Snapshot pretraining needs `--periodic-save-dir` + `--save-epochs`** — these did not exist originally, so job 280253 died in 14s with `unrecognized arguments` (argparse exit 2, surfaced only as a torchrun `ChildFailedError`). Added 2026-06-03: `--periodic-save-dir <dir>` + `--save-epochs "20,40,60,80"` write `checkpoint_epoch<N>.pt` snapshots from the main process inside the epoch loop. Epochs are **1-indexed** (loop is `range(start_epoch, epochs+1)`), so `--save-epochs 100` == the final epoch.
 
 ---
 
