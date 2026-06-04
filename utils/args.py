@@ -109,6 +109,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--save-path", type=str, default=None, help="Optional path to store the final trained checkpoint")
     parser.add_argument("--best-save-path", type=str, default=None, help="Optional path to store the checkpoint achieving the best evaluation accuracy.")
     parser.add_argument("--latest-save-path", type=str, default=None, help="Path to save a checkpoint after every epoch (used for autoresume).")
+    parser.add_argument("--periodic-save-dir", type=str, default=None, help="Directory to store periodic snapshot checkpoints at the epochs listed in --save-epochs. Files are named checkpoint_epoch<N>.pt.")
+    parser.add_argument("--save-epochs", type=str, default=None, help="Comma-separated epoch numbers (e.g. '20,40,60,80') at which to write a snapshot checkpoint into --periodic-save-dir.")
 
     parser.add_argument("--ttt-num-each", type=int, default=2)
     parser.add_argument("--vis-every", type=int, default=25)
@@ -149,5 +151,12 @@ def parse_args() -> argparse.Namespace:
         help="Freeze Hyena conv filter weights (global_conv.kernel, short_conv) during TTT, "
              "leaving FFN, projections, and norms trainable.",
     )
+    # LoRA adapters on the Hyena mixer qkv/out projections (Phase 3 capacity lever).
+    # rank=0 (default) = off. When >0, the base projection weights are frozen and only the
+    # rank-r delta adapts the mixer; the rest of the model trains as usual.
+    parser.add_argument('--lora-rank', type=int, default=0,
+                        help="LoRA rank for Hyena mixer qkv/out projections during TTT. 0 = disabled.")
+    parser.add_argument('--lora-alpha', type=float, default=None,
+                        help="LoRA scaling alpha (scaling = alpha/rank). Defaults to lora-rank (scaling=1).")
 
     return parser.parse_args()

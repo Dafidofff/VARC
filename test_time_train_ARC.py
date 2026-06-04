@@ -223,6 +223,17 @@ def train(args: argparse.Namespace) -> None:
         if (not distributed) or rank == 0:
             print(f"[freeze-hyena-filters] Froze {frozen}/{total} parameter tensors (Hyena conv filters).")
 
+    lora_rank = int(getattr(args, 'lora_rank', 0) or 0)
+    if lora_rank > 0:
+        from utils.lora import inject_lora
+        lora_alpha = getattr(args, 'lora_alpha', None)
+        lora_alpha = float(lora_alpha) if lora_alpha is not None else float(lora_rank)
+        wrapped = inject_lora(model_original, rank=lora_rank, alpha=lora_alpha)
+        model_original.to(device)
+        if (not distributed) or rank == 0:
+            print(f"[lora] Injected rank-{lora_rank} (alpha={lora_alpha:g}) adapters into "
+                  f"{wrapped} Hyena mixer projections; base proj weights frozen.")
+
     for attempt_idx in range(args.ttt_num_each):
         model = deepcopy(model_original)
         print(f"Starting test-time training attempt {attempt_idx + 1}/{args.ttt_num_each}...")
