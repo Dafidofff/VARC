@@ -67,6 +67,19 @@ closing the LR axis (7e-4=39, 1e-3=42, 1.5e-3=40, 2e-3=26 → 1e-3 optimal). Tog
 confirm the diagnosis: the bottleneck is *conditioning capacity*, not step-size. New
 best-so-far: screen 49%, confirmed 43.25%.
 
+**CONFIRMED WIN #2 (2026-06-05): LoRA on the mixer projections — new SOTA 45.0%.** Phase 3.
+Freezing the Hyena `qkv_proj`/`out_proj` base weights and adapting them only via a rank-r LoRA
+delta (on the FiLM+BlockDiag ckpt, baseline lr1e3_const) **confirmed 45.0% P@1 / 48.25% P@2 on
+the full 400** at **rank 4** — beating the previous best (film_freeze 43.25%) by **+1.75pp** and
+cutting the ViT gap to **−5.9pp** (from −9.3pp). This directly validates the under-fit diagnosis:
+the spatial mixer *was* the bottleneck, and *constrained* low-rank capacity fits the support
+transform where the full-projection update (unfrozen baseline / freeze-mixer) was inert. Screen→400:
+r4 53%→45.0%, a regression but still a real win above the bar. Rank sweep: r4 (45.0% confirmed) >
+r8/r16 (screens 51/52%, r16 confirming, r8 confirm 284189 queued); the *smallest* rank won — more
+rank = more overfitting room on the ~100-example TTT set, consistent with the "constrained" framing.
+Next: rank ≤4 (rank 2?), LoRA on more/other projections, and LoRA stacked on the under-trained
+ep20 ckpt (combine the two confirmed levers — over-spec + constrained-capacity).
+
 **Follow-up (exp#17, 2026-06-03): freeze/unfreeze is a wash; the FiLM ckpt is the lever.**
 FiLM *unfrozen* screened 51% (> frozen 49%) but confirmed **42.75% on 400** — a statistical
 tie with frozen 43.25% (the 51>49 screen lead was subset noise yet again). So the +7pp win

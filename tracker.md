@@ -58,6 +58,8 @@ Per-experiment hyperparameter search lives in [ttt_autoresearch.md](ttt_autorese
 | Job | Architecture | Patch | Pretrain val_acc | TTT recipe | Pass@1 | Pass@2 | Δ Pass@1 vs ViT |
 |-----|--------------|-------|-----------------|------------|--------|--------|-----------------|
 | 22232893 | **ViT-18M** | 2 | 78.12% | LR=1e-3 cosine | **52.56%** (210) | **55.90%** (224) | — |
+| 284062 | Hyena **FiLM+BlockDiag + LoRA r4** (best Hyena) | 2 | 81.49% | LR=1e-3 const, rank-4 mixer LoRA | **45.00%** (180) | 48.25% (193) | **−5.9pp** |
+| 284080 | Hyena BlockDiag **@ ep20** (under-trained) | 2 | (ep20 snap) | LR=1e-3 const | 40.25% (161) | 45.75% (183) | −12.3pp |
 | 269797 | Hyena **BlockDiag-ω₀** | 2 | 82.93% | LR=1e-3 const | **36.25%** (145) | 41.50% (166) | **−16.3pp** |
 | 271639 / 274403 | Hyena **FiLM-kernel** | 2 | 74.28% | LR=1e-3 const | 34.00% (136) | 40.75% (163) | −18.6pp |
 | 249019 | Hyena circular AdaLN | 1 | 83.89% | LR=1e-3 const | 18.50% (74) | 22.00% (88) | −34.1pp |
