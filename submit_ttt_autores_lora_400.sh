@@ -32,8 +32,9 @@ cd /home/dwessel/code/VARC
 : "${SWEEP_NAME:?must set SWEEP_NAME via --export}"
 LORA_RANK=${LORA_RANK:-8}; LORA_ALPHA=${LORA_ALPHA:-${LORA_RANK}}
 
-HYENA_CONFIG="/home/dwessel/code/nvSubquadratic-private/varc_configs/cfg_hyena_rearc_subq_ops_patch2_circular_adaln_blockdiag_film.py"
-CKPT="saves/offline_train_Hyena_patch2_blockdiag_film_lr1e3/checkpoint_best.pt"
+# CKPT/CONFIG overridable via --export (must match the screen that produced the reused preds).
+HYENA_CONFIG="${HYENA_CONFIG:-/home/dwessel/code/nvSubquadratic-private/varc_configs/cfg_hyena_rearc_subq_ops_patch2_circular_adaln_blockdiag_film.py}"
+CKPT="${CKPT:-saves/offline_train_Hyena_patch2_blockdiag_film_lr1e3/checkpoint_best.pt}"
 EVAL_SAVE_NAME="ttt_autores/film_${SWEEP_NAME}"
 STRIDE=40
 JOB_IDX=${SLURM_ARRAY_TASK_ID}

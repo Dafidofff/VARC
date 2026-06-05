@@ -39,8 +39,14 @@ LR=${LR:-1e-3}; SCHED=${SCHED:-none}; WD=${WD:-0}; NUM_ATTEMPTS=${NUM_ATTEMPTS:-
 EPOCHS=${EPOCHS:-100}; TTT_NUM_EACH=${TTT_NUM_EACH:-2}; FREEZE=${FREEZE:-0}; BATCH=${BATCH:-8}
 LORA_RANK=${LORA_RANK:-8}; LORA_ALPHA=${LORA_ALPHA:-${LORA_RANK}}
 
-HYENA_CONFIG="/home/dwessel/code/nvSubquadratic-private/varc_configs/cfg_hyena_rearc_subq_ops_patch2_circular_adaln_blockdiag_film.py"
-CKPT="saves/offline_train_Hyena_patch2_blockdiag_film_lr1e3/checkpoint_best.pt"
+# CKPT/CONFIG default to the best (FiLM+BlockDiag) ckpt, but are overridable via --export so
+# the same harness can run LoRA on other checkpoints (e.g. the under-trained ep20 BlockDiag
+# snapshot — pair CKPT=...epoch20.pt with the PLAIN blockdiag config, not the FiLM one).
+HYENA_CONFIG="${HYENA_CONFIG:-/home/dwessel/code/nvSubquadratic-private/varc_configs/cfg_hyena_rearc_subq_ops_patch2_circular_adaln_blockdiag_film.py}"
+CKPT="${CKPT:-saves/offline_train_Hyena_patch2_blockdiag_film_lr1e3/checkpoint_best.pt}"
+# Prefix kept as "film_" for parity with submit_ttt_autores_lora_400.sh (screen+confirm must
+# share EVAL_SAVE_NAME so the confirm reuses screen preds). For non-FiLM ckpts the prefix is
+# just a historical label, e.g. SWEEP_NAME=lora_r4_ep20 -> ttt_autores/film_lora_r4_ep20.
 EVAL_SAVE_NAME="ttt_autores/film_${SWEEP_NAME}"
 STRIDE=25
 JOB_IDX=${SLURM_ARRAY_TASK_ID}
