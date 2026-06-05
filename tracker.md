@@ -64,6 +64,9 @@ Per-experiment hyperparameter search lives in [ttt_autoresearch.md](ttt_autorese
 | 248237 | Hyena circular AdaLN | 1 | 83.89% | LR=3e-4 cosine | 13.75% (55) | 17.00% (68) | −38.8pp |
 | 277241 | Hyena BlockDiag-ω₀ + **freeze-filters** | 2 | 82.93% | LR=1e-3 const, frozen conv | **36.00%** (144) | 38.50% (154) | **−16.6pp** |
 | 283580 | Hyena **BlockDiag-ω₀** (pretrain record) | 1 | **86.06%** | LR=1e-3 const | 38.50% (154) | 41.75% (167) | **−13.6pp** |
+| 284080 | Hyena BlockDiag-ω₀ **@ pretrain-epoch 20** (under-trained) | 2 | (ep20 snap) | LR=1e-3 const | **40.25%** (161) | 45.75% (183) | **−12.3pp** |
+
+**Over-specialization CONFIRMED (2026-06-05, job 284080).** TTT'ing the BlockDiag p=2 checkpoint **frozen at pretrain-epoch 20** (under-trained, before convergence) scores **40.25% Pass@1 / 45.75% Pass@2 on the full 400** — **+4.0pp over the fully-trained (epoch-100) BlockDiag's 36.25%**, with no other change. The fully-converged filters over-specialize during offline pretraining in a way that *hurts* downstream TTT; an earlier checkpoint retains more adaptable structure. The 46%→40.25% screen→400 held (not subset noise). Strikingly, ep20-BlockDiag (40.25%, no FiLM) lands only −3pp under the FiLM ckpt (43.25%), i.e. *most* of FiLM's gain is recoverable just by not over-training. The epoch{40,60,80} curve is being screened to locate the sweet spot.
 
 **Core finding — Hyena is TTT-adaptation-limited, not capacity-limited.**
 Pretrain val_acc and TTT Pass@1 are *anti-correlated* for Hyena: patch=1 has the highest pretrain acc (83.89%) but TTTs worst (18.5%); BlockDiag p=2 has slightly lower pretrain acc (82.93%) yet nearly doubles TTT (36.25%). The driver of TTT performance is the **BlockDiag ω₀ spectrum**, not raw eval_acc. The filters over-specialize during offline pretraining in a way ~100 TTT epochs cannot undo.
