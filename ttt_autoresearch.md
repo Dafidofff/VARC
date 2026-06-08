@@ -93,6 +93,42 @@ and constrained-capacity levers do **not** stack (mirrors the earlier r4+ep20 nu
 **alpha decoupling** (rank 2 with α=4 / α=8) — scaling the LoRA delta on the optimal rank without
 adding rank. SOTA stays **LoRA r4/r16 = 45.0%**.
 
+---
+
+## Phase 4 conclusion — the ~45% 400-ceiling is robust; the arc is closed (2026-06-08)
+
+After the rank sweep saturated, the loop spent a full session pushing every remaining TTT-side
+lever on the FiLM+BlockDiag p=2 checkpoint. **All of them land in the same 51–56% *screen* band
+and none beats the LoRA r2 baseline (56% screen / ~45% on 400).** The bottleneck is not any single
+TTT hyperparameter — it is the **intrinsic TTT-adaptability of this pretrained checkpoint**.
+
+**Every lever tried, and where it landed (screen → 400):**
+
+| Lever | Best screen | 400-confirm | Verdict |
+|-------|-------------|-------------|---------|
+| **LoRA rank** r2/r4/r8/r16 (mixer proj) | r2 56% | **45.0%** (r4/r16), 44.25% (r2) | **SOTA**; flat across rank |
+| LoRA **alpha** decoupling (α=2/4/8) | α2 56% | — | neutral; α=rank optimal, α2>α4≈α8 |
+| LoRA on the **FFN** (layer1/2; mixer+FFN & FFN-only) | 52% | — | does not help; constraining FFN adds nothing |
+| **Over-spec** ckpt (TTT an under-trained snapshot) | ep40 50% | 42.5% (ep40), 40.25% (ep20) | real but below FiLM-LoRA; an inverted-U in pretrain-epoch |
+| **ep40 + LoRA** (stack the two real levers) | 50% | — | does **not** stack |
+| **Per-task adaptive epoch budget** (early-stop on support plateau) | 51% | — | neutral; reclaims epochs but no Pass@1 gain |
+
+**SOTA = LoRA r2/r4/r16 ≈ 45.0% Pass@1 on the full 400 (−5.9pp vs ViT 52.1%).** Rank, alpha, target
+set, checkpoint-epoch, lever-stacking, and per-task budget are all exhausted.
+
+**The recurring trap, stated once for the record:** the 100-task screen over-estimated the 400 result
+**four separate times** (freeze-mixer, NaN-guard, FiLM-unfrozen, and rank r2 56%→44.25%). Screen-vs-400
+regression of ~10pp is the norm here, not the exception; **no screen delta was ever trusted without a
+400-confirm**, and that discipline repeatedly saved a false positive. A 56% screen is ~45% on 400.
+
+**What would actually move the number (all out of THIS loop's scope — they change the checkpoint, not
+the TTT recipe):** (1) a *different pretrain* — the under-fit diagnosis says ~⅔ of WRONG tasks never fit
+the support set, a capacity property baked in at pretrain time; (2) the **ViT+Hyena ensemble** — oracle
+upper bound 56.7% P@1 / 61.5% P@2 (Hyena solves only 18 tasks ViT misses), a real +4.6pp but it adds the
+ViT checkpoint. Both are pretrain/architecture moves, deferred to the project tracker, not TTT search.
+
+**Status: loop wound down.** No further TTT-recipe screens are worth launching on this checkpoint.
+
 **Follow-up (exp#17, 2026-06-03): freeze/unfreeze is a wash; the FiLM ckpt is the lever.**
 FiLM *unfrozen* screened 51% (> frozen 49%) but confirmed **42.75% on 400** — a statistical
 tie with frozen 43.25% (the 51>49 screen lead was subset noise yet again). So the +7pp win
