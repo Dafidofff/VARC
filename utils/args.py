@@ -158,5 +158,8 @@ def parse_args() -> argparse.Namespace:
                         help="LoRA rank for Hyena mixer qkv/out projections during TTT. 0 = disabled.")
     parser.add_argument('--lora-alpha', type=float, default=None,
                         help="LoRA scaling alpha (scaling = alpha/rank). Defaults to lora-rank (scaling=1).")
+    parser.add_argument('--lora-targets', type=str, default="qkv_proj,out_proj",
+                        help="Comma-separated leaf module names to wrap with LoRA. Default is the "
+                             "Hyena mixer projections; add 'layer1,layer2' to also constrain the FFN.")
 
     return parser.parse_args()

@@ -38,6 +38,7 @@ cd /home/dwessel/code/VARC
 LR=${LR:-1e-3}; SCHED=${SCHED:-none}; WD=${WD:-0}; NUM_ATTEMPTS=${NUM_ATTEMPTS:-10}
 EPOCHS=${EPOCHS:-100}; TTT_NUM_EACH=${TTT_NUM_EACH:-2}; FREEZE=${FREEZE:-0}; BATCH=${BATCH:-8}
 LORA_RANK=${LORA_RANK:-8}; LORA_ALPHA=${LORA_ALPHA:-${LORA_RANK}}
+LORA_TARGETS=${LORA_TARGETS:-qkv_proj,out_proj}
 
 # CKPT/CONFIG default to the best (FiLM+BlockDiag) ckpt, but are overridable via --export so
 # the same harness can run LoRA on other checkpoints (e.g. the under-trained ep20 BlockDiag
@@ -85,6 +86,7 @@ for file_name in "${file_names[@]}"; do
         --ttt-num-each "${TTT_NUM_EACH}" \
         --lora-rank "${LORA_RANK}" \
         --lora-alpha "${LORA_ALPHA}" \
+        --lora-targets "${LORA_TARGETS}" \
         ${FREEZE_ARG} \
         --no-compile
     fi
