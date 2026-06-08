@@ -39,6 +39,11 @@ def ttt_once(model, device, distributed, rank, train_loader, train_sampler, eval
     optimizer, scaler, scheduler = load_optimizer(
         model=model, args=args, device=device, distributed=distributed, rank=rank
     )
+    # Per-task adaptive epoch budget: count consecutive epochs with support train_acc at/above
+    # the threshold and stop the (easy) task once it plateaus. 0/0 = disabled.
+    es_acc = float(getattr(args, 'ttt_early_stop_acc', 0.0) or 0.0)
+    es_patience = int(getattr(args, 'ttt_early_stop_patience', 0) or 0)
+    es_plateau_epochs = 0
     try:
         for epoch in range(0, args.epochs + 1):
             if train_sampler is not None:
@@ -167,6 +172,21 @@ def ttt_once(model, device, distributed, rank, train_loader, train_sampler, eval
 
             if scheduler is not None:
                 scheduler.step()
+
+            # Per-task early-stop: once the support set is fit (train_acc >= threshold) for
+            # `patience` consecutive epochs, this task has plateaued -- stop and save the
+            # remaining epochs (which would only overfit). Hard tasks never reach the
+            # threshold, so they run the full --epochs budget unchanged.
+            if es_acc > 0.0 and es_patience > 0:
+                if train_acc >= es_acc:
+                    es_plateau_epochs += 1
+                else:
+                    es_plateau_epochs = 0
+                if es_plateau_epochs >= es_patience:
+                    if is_main_process:
+                        print(f"[ttt-early-stop] support train_acc>={es_acc:g} for "
+                              f"{es_patience} epochs; stopping at epoch {epoch}/{args.epochs}.")
+                    break
 
     finally:
         if distributed and dist.is_initialized():

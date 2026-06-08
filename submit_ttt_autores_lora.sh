@@ -39,6 +39,7 @@ LR=${LR:-1e-3}; SCHED=${SCHED:-none}; WD=${WD:-0}; NUM_ATTEMPTS=${NUM_ATTEMPTS:-
 EPOCHS=${EPOCHS:-100}; TTT_NUM_EACH=${TTT_NUM_EACH:-2}; FREEZE=${FREEZE:-0}; BATCH=${BATCH:-8}
 LORA_RANK=${LORA_RANK:-8}; LORA_ALPHA=${LORA_ALPHA:-${LORA_RANK}}
 LORA_TARGETS=${LORA_TARGETS:-qkv_proj,out_proj}
+ES_ACC=${ES_ACC:-0}; ES_PATIENCE=${ES_PATIENCE:-0}
 
 # CKPT/CONFIG default to the best (FiLM+BlockDiag) ckpt, but are overridable via --export so
 # the same harness can run LoRA on other checkpoints (e.g. the under-trained ep20 BlockDiag
@@ -87,6 +88,8 @@ for file_name in "${file_names[@]}"; do
         --lora-rank "${LORA_RANK}" \
         --lora-alpha "${LORA_ALPHA}" \
         --lora-targets "${LORA_TARGETS}" \
+        --ttt-early-stop-acc "${ES_ACC}" \
+        --ttt-early-stop-patience "${ES_PATIENCE}" \
         ${FREEZE_ARG} \
         --no-compile
     fi

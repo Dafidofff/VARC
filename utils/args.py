@@ -161,5 +161,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--lora-targets', type=str, default="qkv_proj,out_proj",
                         help="Comma-separated leaf module names to wrap with LoRA. Default is the "
                              "Hyena mixer projections; add 'layer1,layer2' to also constrain the FFN.")
+    # Per-task adaptive epoch budget (under-fit diagnosis): easy tasks fit the support set
+    # (train_acc) early then waste the remaining epochs overfitting; hard tasks never fit. Stop a
+    # task once its support train_acc holds >= acc for `patience` consecutive epochs; hard tasks
+    # that never reach the threshold keep the full --epochs budget. 0 = disabled (default).
+    parser.add_argument('--ttt-early-stop-acc', type=float, default=0.0,
+                        help="Support-set train_acc threshold for per-task TTT early-stop. 0 = off.")
+    parser.add_argument('--ttt-early-stop-patience', type=int, default=0,
+                        help="Consecutive epochs at/above --ttt-early-stop-acc before stopping. 0 = off.")
 
     return parser.parse_args()
