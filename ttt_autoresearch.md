@@ -80,6 +80,19 @@ rank = more overfitting room on the ~100-example TTT set, consistent with the "c
 Next: rank ≤4 (rank 2?), LoRA on more/other projections, and LoRA stacked on the under-trained
 ep20 ckpt (combine the two confirmed levers — over-spec + constrained-capacity).
 
+**Rank/alpha sweep closed (2026-06-08): LoRA plateaus at ~45% on 400 across ranks 2–16.**
+Continuing the rank search below r4: **rank 2 screened 56%** (the session's top screen, > r4 53 / r16
+52 / r8 51), so it earned a 400-confirm — which landed at **44.3% P@1 (176/397) / 49.1% P@2**, a
+**statistical tie with the r4/r16 SOTA (45.0%), NOT a new best** (ceiling 44.75% even if the last 3
+tasks hit). The screen ordering r2 56 > r4 53 > r16 52 was subset noise *yet again* — the fourth time
+a screen lead evaporated at scale. Rank curve on screen peaks at r2 (r1 54 < r2 56 > r4 53 > r16 52 >
+r8 51), but on the full 400 LoRA is **flat at ~44–45% for all ranks 2–16**: constrained low-rank mixer
+capacity has a hard ceiling here, and *which* small rank doesn't matter. Two side threads also closed:
+**ep40+LoRA combo** (LoRA r4 on the over-spec PEAK ckpt) screened only 50% (discard) — the over-spec
+and constrained-capacity levers do **not** stack (mirrors the earlier r4+ep20 null). Still in flight:
+**alpha decoupling** (rank 2 with α=4 / α=8) — scaling the LoRA delta on the optimal rank without
+adding rank. SOTA stays **LoRA r4/r16 = 45.0%**.
+
 **Follow-up (exp#17, 2026-06-03): freeze/unfreeze is a wash; the FiLM ckpt is the lever.**
 FiLM *unfrozen* screened 51% (> frozen 49%) but confirmed **42.75% on 400** — a statistical
 tie with frozen 43.25% (the 51>49 screen lead was subset noise yet again). So the +7pp win
