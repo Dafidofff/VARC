@@ -174,6 +174,11 @@ def train(args: argparse.Namespace) -> None:
     best_eval_acc = float("-inf")
     global_start = time.time()
     previous_total_steps = 0
+    snapshot_epochs = set()
+    if args.save_epochs:
+        snapshot_epochs = {int(e) for e in args.save_epochs.split(",") if e.strip()}
+        if is_main_process and args.periodic_save_dir:
+            print(f"  [snapshot] will save checkpoints at epochs {sorted(snapshot_epochs)} into {args.periodic_save_dir}")
     try:
         for epoch in range(start_epoch, args.epochs + 1):
             if train_sampler is not None:
@@ -340,6 +345,22 @@ def train(args: argparse.Namespace) -> None:
                 if scaler.is_enabled():
                     latest_payload["scaler_state"] = scaler.state_dict()
                 torch.save(latest_payload, latest_path)
+
+            if args.periodic_save_dir and snapshot_epochs and epoch in snapshot_epochs and is_main_process:
+                snap_dir = Path(args.periodic_save_dir)
+                snap_dir.parent.mkdir(parents=True, exist_ok=True)
+                snap_dir.mkdir(parents=True, exist_ok=True)
+                snap_payload: Dict[str, Any] = {
+                    "model_state": model_for_eval.state_dict(),
+                    "config": vars(args),
+                    "epoch": epoch,
+                }
+                if eval_acc is not None:
+                    snap_payload["eval_accuracy"] = eval_acc
+                if scaler.is_enabled():
+                    snap_payload["scaler_state"] = scaler.state_dict()
+                torch.save(snap_payload, snap_dir / f"checkpoint_epoch{epoch}.pt")
+                print(f"  [snapshot] saved checkpoint_epoch{epoch}.pt to {snap_dir}")
 
             if wandb_run is not None and is_main_process:
                 metrics = {

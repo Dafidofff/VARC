@@ -32,12 +32,16 @@ Hyena runs require `--no-compile` (circular FFT uses complex64, incompatible wit
 | Job | Architecture | Patch | LR | Sched | Best eval_acc | WandB | Checkpoint |
 |-----|--------------|-------|----|-------|--------------|-------|------------|
 | 277654 | Hyena **BlockDiag-ω₀** circular AdaLN | 1 | 1e-3 | cosine | **86.06%** | `jja2loqy` | `saves/offline_train_Hyena_patch1_blockdiag_lr1e3/` |
+| 287911 | Hyena **BlockDiag+FiLM + plasticity wd0.05** (snapshots) | 2 | 1e-3 | cosine | 85.58% | `y88giysw` | `saves/offline_train_Hyena_p2_blkd_film_wd05_snap/` |
+| 287912 | Hyena **BlockDiag+FiLM + plasticity wd0.10** (snapshots) | 2 | 1e-3 | cosine | 84.13% | `zwynjrlz` | `saves/offline_train_Hyena_p2_blkd_film_wd10_snap/` |
 | 22255864 | Hyena circular AdaLN | 1 | **1e-3** | cosine | 83.89% | `lvzcb9v8` | `saves/offline_train_Hyena_100ep_lr1e3/` |
 | 268829 | Hyena **BlockDiag-ω₀** circular AdaLN | 2 | 1e-3 | cosine | 82.93% | `r1kbefxu` | `saves/offline_train_Hyena_patch2_blockdiag_lr1e3/` |
 | 277655 | Hyena **BlockDiag-ω₀ + FiLM + AdaLN** | 2 | 1e-3 | cosine | 81.49% | `r3xw5fz5` | `saves/offline_train_Hyena_patch2_blockdiag_film_lr1e3/` |
 | 22109856 | **ViT-18M** (attention baseline) | 2 | 1e-3 | cosine | 78.12% | `cwkfvy5p` | `saves/offline_train_ViT/` |
 | 22255863 | Hyena circular AdaLN | 1 | 3e-4 | cosine | 75.96% | `0q3e1yfe` | `saves/offline_train_Hyena_100ep/` |
 | 268830 | Hyena **FiLM-kernel** circular AdaLN | 2 | 1e-3 | cosine | 74.28% | — | `saves/offline_train_Hyena_patch2_film_lr1e3/` |
+| 286880 | **Hybrid HAHA** (6 Hyena + 6 Attn, alternating) BlockDiag+FiLM | 2 | 1e-3 | cosine | 73.32% | `n6q6yzmm` | `saves/offline_train_Hyena_hybrid_haha_p2_blockdiag_film/` |
+| 286881 | **Hybrid HHAA** (6 Hyena + 6 Attn, paired) BlockDiag+FiLM | 2 | 1e-3 | cosine | 66.59% | `physu5g2` | `saves/offline_train_Hyena_hybrid_hhaa_p2_blockdiag_film/` |
 
 Both 2026-05-29 in-flight runs are now **done** (folded into the table above):
 277654 p1-BlockDiag finished 2026-06-03 (COMPLETED, 100 ep, 1d 22h) at **86.06%** — the new highest-pretrain-accuracy run of any architecture; 277655 BlockDiag+FiLM+AdaLN p=2 finished 2026-06-01 at 81.49%.
@@ -47,6 +51,23 @@ Both 2026-05-29 in-flight runs are now **done** (folded into the table above):
 - **BlockDiag-ω₀ is the best kernel at both patch sizes.** p=1 BlockDiag (86.06%) > plain p=1 AdaLN (83.89%); p=2 BlockDiag (82.93%) clears the ViT baseline (78.12%). Swapping in the BlockDiag kernel adds ~+2pp on top of plain AdaLN at p=1.
 - **Patch=1 > patch=2 on pretrain accuracy** (86.06% vs 82.93% for BlockDiag), but recall pretrain acc has been *anti-correlated* with TTT for Hyena — see TTT section. **RESOLVED (job 283580): the record 86.06% pretrain did NOT translate** — p1-BlockDiag TTTs to only **38.50% Pass@1 / 41.75% Pass@2** on the full 400, *below* the p=2 FiLM ckpt's 43.25%. The anti-correlation holds: highest pretrain acc of any run → still −13.6pp under ViT. Confirms the bottleneck is the TTT-adaptation path, not pretrain quality.
 - FiLM-kernel underperforms BlockDiag by −8.6pp; adding FiLM *on top of* BlockDiag (81.49%) also slightly *lowers* pretrain acc vs plain BlockDiag p=2 (82.93%). FiLM SIREN modulation does not help in this setup.
+
+**Phase 5 pretrains (2026-06-10/11) — plasticity-regularized + hybrid, all done, TTT pending.**
+The motivation: the project's central finding is that Hyena is *TTT-adaptation-limited* and the
+FiLM+BlockDiag p=2 checkpoint caps at ~45% on the full-400 TTT (autoresearch loop wound down,
+[ttt_autoresearch.md](ttt_autoresearch.md)). Two new pretrain levers aim at the *checkpoint* (out
+of the TTT loop's scope): (a) **plasticity** — weight-decay {0.05, 0.10} to resist the
+over-specialization that the ep40>ep100 inverted-U implicates; (b) **Hyena/Attention hybrids** —
+add global self-attention blocks to lift raw capacity.
+- **Plasticity weight-decay raises pretrain acc**: wd0.05 = **85.58%**, wd0.10 = 84.13%, both *above*
+  the wd0 FiLM+BlockDiag baseline (81.49%) — i.e. light decay both regularizes and fits better.
+  Both dump `checkpoint_epoch{20,40,60,80,100}.pt` snapshots so the whole epoch curve is TTT-screenable.
+  **Open question (the whole point): does higher pretrain acc finally translate to TTT, or does the
+  pretrain↔TTT anti-correlation hold?** Needs the TTT runs below.
+- **Hybrids underperform on pretrain acc**: HAHA (alternating) 73.32% > HHAA (paired) 66.59%, both
+  *below* the pure-Hyena FiLM+BlockDiag (81.49%). Interleaving (HAHA) beats pairing (HHAA) by +6.7pp.
+  Whether the attention blocks help *TTT* (the real question — attention may TTT-adapt better than the
+  inert Hyena mixer) is open and is exactly what the TTT runs below test.
 
 ---
 
@@ -72,6 +93,36 @@ Per-experiment hyperparameter search lives in [ttt_autoresearch.md](ttt_autorese
 
 **Core finding — Hyena is TTT-adaptation-limited, not capacity-limited.**
 Pretrain val_acc and TTT Pass@1 are *anti-correlated* for Hyena: patch=1 has the highest pretrain acc (83.89%) but TTTs worst (18.5%); BlockDiag p=2 has slightly lower pretrain acc (82.93%) yet nearly doubles TTT (36.25%). The driver of TTT performance is the **BlockDiag ω₀ spectrum**, not raw eval_acc. The filters over-specialize during offline pretraining in a way ~100 TTT epochs cannot undo.
+
+---
+
+## Final TTT runs to execute (planned) — close out VARC vs Hyena
+
+These are the **remaining full-400 TTT runs** that finalize the VARC↔Hyena comparison. Each TTTs a
+Phase-5 (or new mamba) pretrained checkpoint with the **best confirmed TTT recipe** from the
+autoresearch loop — **LoRA r4 on the mixer projections, lr1e3_const, FiLM ckpt** (SOTA = 45.0% on
+400, see [ttt_autoresearch.md](ttt_autoresearch.md)). Reference: ViT = **52.56%**, best Hyena so far
+(FiLM+BlockDiag p=2 + LoRA r4) = **45.00%**.
+
+| # | Checkpoint | Pretrain val_acc | TTT recipe | Submit script | Status |
+|---|-----------|------------------|------------|---------------|--------|
+| 1 | **plasticity wd0.05** (`..._wd05_snap/checkpoint_best.pt`) | 85.58% | LoRA r4, lr1e3_const | _to copy from_ `submit_ttt_autores_lora_400.sh` | ⏳ pending |
+| 2 | **plasticity wd0.10** (`..._wd10_snap/checkpoint_best.pt`) | 84.13% | LoRA r4, lr1e3_const | ″ | ⏳ pending |
+| 3 | **hybrid HAHA** (`..._hybrid_haha_.../checkpoint_best.pt`) | 73.32% | LoRA r4, lr1e3_const | ″ | ⏳ pending |
+| 4 | **hybrid HHAA** (`..._hybrid_hhaa_.../checkpoint_best.pt`) | 66.59% | LoRA r4, lr1e3_const | ″ | ⏳ pending |
+| 5 | **pure-full mamba** (`saves/offline_train_Mamba_p2/checkpoint_best.pt`) | *pretraining TBD* | LoRA r4, lr1e3_const | ″ | 🚧 pretrain blocked — see below |
+
+Optional, if any of #1–4 beats 45%: also TTT the **epoch{20,40,60,80}** snapshots of the winning
+plasticity ckpt (the over-spec inverted-U lever stacks with plasticity), and the **ViT+Hyena oracle
+ensemble** (upper bound 56.7% P@1 — adds the ViT ckpt, separate analysis).
+
+**Mamba pretrain blocker (2026-06-14):** the `nvsubq` conda env does **not** have `mamba_ssm` /
+`causal_conv1d` installed (only `triton`), and there is no `varc_configs/cfg_mamba_*.py` yet. The
+ND-Mamba wrapper (`nvsubquadratic/modules/mamba_nd.py`) is a clean drop-in for the `sequence_mixer`
+slot (the AdaLN block calls `sequence_mixer(x)` with no extra args), so a config is straightforward
+to write — but the run will crash at `from mamba_ssm import Mamba2` until the package is built into
+the env (CUDA compile against torch 2.10+cu128). Resolve the env first, then write + smoke-test the
+config and queue it.
 
 ---
 
