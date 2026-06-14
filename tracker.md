@@ -110,19 +110,27 @@ autoresearch loop — **LoRA r4 on the mixer projections, lr1e3_const, FiLM ckpt
 | 2 | **plasticity wd0.10** (`..._wd10_snap/checkpoint_best.pt`) | 84.13% | LoRA r4, lr1e3_const | ″ | ⏳ pending |
 | 3 | **hybrid HAHA** (`..._hybrid_haha_.../checkpoint_best.pt`) | 73.32% | LoRA r4, lr1e3_const | ″ | ⏳ pending |
 | 4 | **hybrid HHAA** (`..._hybrid_hhaa_.../checkpoint_best.pt`) | 66.59% | LoRA r4, lr1e3_const | ″ | ⏳ pending |
-| 5 | **pure-full mamba** (`saves/offline_train_Mamba_p2/checkpoint_best.pt`) | *pretraining TBD* | LoRA r4, lr1e3_const | ″ | 🚧 pretrain blocked — see below |
+| 5 | **pure-full mamba** (`saves/offline_train_Mamba_p2/checkpoint_best.pt`) | *pretraining (job 290423)* | LoRA r4, lr1e3_const | ″ | 🟡 pretrain queued; TTT after |
 
 Optional, if any of #1–4 beats 45%: also TTT the **epoch{20,40,60,80}** snapshots of the winning
 plasticity ckpt (the over-spec inverted-U lever stacks with plasticity), and the **ViT+Hyena oracle
 ensemble** (upper bound 56.7% P@1 — adds the ViT ckpt, separate analysis).
 
-**Mamba pretrain blocker (2026-06-14):** the `nvsubq` conda env does **not** have `mamba_ssm` /
-`causal_conv1d` installed (only `triton`), and there is no `varc_configs/cfg_mamba_*.py` yet. The
-ND-Mamba wrapper (`nvsubquadratic/modules/mamba_nd.py`) is a clean drop-in for the `sequence_mixer`
-slot (the AdaLN block calls `sequence_mixer(x)` with no extra args), so a config is straightforward
-to write — but the run will crash at `from mamba_ssm import Mamba2` until the package is built into
-the env (CUDA compile against torch 2.10+cu128). Resolve the env first, then write + smoke-test the
-config and queue it.
+**Mamba pretrain — RESOLVED & QUEUED (2026-06-14, job 290423).** Pure-full Mamba2 arm of the
+comparison: patch=2 + AdaLN-Zero + **bidirectional Mamba2** mixer, embed_dim=384, 12 blocks,
+eff. batch 256, cosine, snapshots {20,40,60,80,100} → `saves/offline_train_Mamba_p2/`. Config:
+`varc_configs/cfg_mamba_p2_bidir.py` (+ `_mamba_block.py` adapter). **40.69M params** — ~2× ViT
+(18M) and bigger than BlockDiag (24.4M), since bidirectional doubles the mixer; *not* param-matched
+(a known caveat — left "full" per the brief). Run with `--no-compile`.
+- *Dependency saga (for the record):* `mamba_ssm` was **not** installed in `nvsubq`. Prebuilt wheels
+  need **glibc 2.32** but this is AlmaLinux 8.10 / **glibc 2.28** → `ImportError: GLIBC_2.32 not found`.
+  Built **causal_conv1d 1.4.0 + mamba_ssm 2.2.2 from source** instead (`module load cuda/12.9.2
+  gnu12/12.4.0`; system gcc 8.5 is too old — torch needs gcc ≥9; PyPI sdist of causal-conv1d omits
+  `csrc/` so build from the git tag). Imports cleanly under a plain `conda activate nvsubq`.
+- *Integration bug the smoke caught:* `AdaLNZeroResidualBlock` calls `sequence_mixer(x, conditioning=cond)`
+  (Hyena's FiLM kernel consumes it); Mamba's `forward(x)` rejected the kwarg. Fixed with the
+  `MambaMixer` subclass in `_mamba_block.py` that ignores `conditioning` (task conditioning still
+  reaches Mamba via the block's AdaLN-Zero modulation). GPU smoke then passed (forward+backward OK).
 
 ---
 
