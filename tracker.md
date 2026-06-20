@@ -117,18 +117,20 @@ autoresearch loop — **LoRA r4 on the mixer projections, lr1e3_const, FiLM ckpt
 | 3b | **hybrid HAHA** no-LoRA | 73.32% | full fine-tune, lr1e3_const | `slurm/hipster/submit_ttt_hybrid_haha_nolora_400.sh` | ⏳ pending (run on next cluster) |
 | 4 | **hybrid HHAA** (`..._hybrid_hhaa_.../checkpoint_best.pt`) | 66.59% | LoRA r4, lr1e3_const | `slurm/hipster/submit_ttt_hybrid_hhaa_lora_400.sh` | ✅ 292171 — **40.0% P@1 / 44.5% P@2** |
 | 4b | **hybrid HHAA** no-LoRA | 66.59% | full fine-tune, lr1e3_const | `slurm/hipster/submit_ttt_hybrid_hhaa_nolora_400.sh` | ⏳ pending (run on next cluster) |
-| 5 | **pure-full mamba** (`saves/offline_train_Mamba_p2/checkpoint_best.pt`) | *pretraining (job 290423)* | LoRA r4, lr1e3_const | ″ | 🟡 pretrain queued; TTT after |
+| 5 | **pure-full mamba** (`saves/offline_train_Mamba_p2/checkpoint_best.pt`) | ❌ diverged (NaN ep13) | LoRA r4, lr1e3_const | ″ | ❌ pretrain failed — needs rerun with gradient clipping / lower LR |
 
 Optional, if any of #1–4 beats 45%: also TTT the **epoch{20,40,60,80}** snapshots of the winning
 plasticity ckpt (the over-spec inverted-U lever stacks with plasticity), and the **ViT+Hyena oracle
 ensemble** (upper bound 56.7% P@1 — adds the ViT ckpt, separate analysis).
 
-**Mamba pretrain — RESOLVED & QUEUED (2026-06-14, job 290423).** Pure-full Mamba2 arm of the
-comparison: patch=2 + AdaLN-Zero + **bidirectional Mamba2** mixer, embed_dim=384, 12 blocks,
-eff. batch 256, cosine, snapshots {20,40,60,80,100} → `saves/offline_train_Mamba_p2/`. Config:
-`varc_configs/cfg_mamba_p2_bidir.py` (+ `_mamba_block.py` adapter). **40.69M params** — ~2× ViT
-(18M) and bigger than BlockDiag (24.4M), since bidirectional doubles the mixer; *not* param-matched
-(a known caveat — left "full" per the brief). Run with `--no-compile`.
+**Mamba pretrain — FAILED (2026-06-15, job 290423).** Training diverged at epoch 13: `train_loss=nan`
+from ep11 intermittently, permanent NaN from ep13 onwards. Best eval_acc was only **19.71% at ep12**
+(vs. 81%+ for all Hyena runs). The ep20/40/60/80/100 snapshot checkpoints are all post-divergence
+and unusable for TTT. `checkpoint_best.pt` was saved at ep12 but is from a barely-trained model.
+**Root cause unclear** — likely gradient explosion when the cosine warmup hits LR=1e-3 peak (same
+LR that works for Hyena/ViT, but Mamba SSM state updates may be less stable). **Needs rerun** with
+gradient clipping (`--grad-clip 1.0`) and/or a lower peak LR (e.g. 3e-4). Config: `varc_configs/cfg_mamba_p2_bidir.py`
+(+ `_mamba_block.py` adapter). **40.69M params** — ~2× ViT (18M); run with `--no-compile`.
 - *Dependency saga (for the record):* `mamba_ssm` was **not** installed in `nvsubq`. Prebuilt wheels
   need **glibc 2.32** but this is AlmaLinux 8.10 / **glibc 2.28** → `ImportError: GLIBC_2.32 not found`.
   Built **causal_conv1d 1.4.0 + mamba_ssm 2.2.2 from source** instead (`module load cuda/12.9.2
