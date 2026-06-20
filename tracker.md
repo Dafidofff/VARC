@@ -16,7 +16,7 @@
 | Step | Description | Status |
 |------|-------------|--------|
 | 1 | Build augmented TTT dataset (`augment_data.py`) | ✅ Done |
-| 2 | Offline pretraining of VARC-ViT (`submit_pretrain_varc_vit_h100.sh`) | ✅ Done |
+| 2 | Offline pretraining of VARC-ViT (`slurm/hipster/submit_pretrain_varc_vit_h100.sh`) | ✅ Done |
 | 3 | Test-time training (TTT) for ARC-1 | ✅ Done (ViT Pass@1 = 52.56%) |
 | 4 | Analysis / HTML visualizations | ✅ Done (`analysis_results_arc.html`) |
 
@@ -79,7 +79,9 @@ Per-experiment hyperparameter search lives in [ttt_autoresearch.md](ttt_autorese
 | Job | Architecture | Patch | Pretrain val_acc | TTT recipe | Pass@1 | Pass@2 | Δ Pass@1 vs ViT |
 |-----|--------------|-------|-----------------|------------|--------|--------|-----------------|
 | 22232893 | **ViT-18M** | 2 | 78.12% | LR=1e-3 cosine | **52.56%** (210) | **55.90%** (224) | — |
-| 284062 | Hyena **FiLM+BlockDiag + LoRA r4** (best Hyena) | 2 | 81.49% | LR=1e-3 const, rank-4 mixer LoRA | **45.00%** (180) | 48.25% (193) | **−5.9pp** |
+| 284062 | Hyena **FiLM+BlockDiag + LoRA r4** (best Hyena) | 2 | 81.49% | LR=1e-3 const, rank-4 mixer LoRA | **45.00%** (180) | 48.25% (193) | **−7.6pp** |
+| 292170 | **Hybrid HAHA** (alternating H A, LoRA r4) | 2 | 73.32% | LR=1e-3 const, rank-4 attn LoRA | **42.00%** (168) | **46.00%** (184) | **−10.6pp** |
+| 292171 | **Hybrid HHAA** (paired H H A A, LoRA r4) | 2 | 66.59% | LR=1e-3 const, rank-4 attn LoRA | **40.00%** (160) | **44.50%** (178) | **−12.6pp** |
 | 284080 | Hyena BlockDiag **@ ep20** (under-trained) | 2 | (ep20 snap) | LR=1e-3 const | 40.25% (161) | 45.75% (183) | −12.3pp |
 | 269797 | Hyena **BlockDiag-ω₀** | 2 | 82.93% | LR=1e-3 const | **36.25%** (145) | 41.50% (166) | **−16.3pp** |
 | 271639 / 274403 | Hyena **FiLM-kernel** | 2 | 74.28% | LR=1e-3 const | 34.00% (136) | 40.75% (163) | −18.6pp |
@@ -94,6 +96,9 @@ Per-experiment hyperparameter search lives in [ttt_autoresearch.md](ttt_autorese
 **Core finding — Hyena is TTT-adaptation-limited, not capacity-limited.**
 Pretrain val_acc and TTT Pass@1 are *anti-correlated* for Hyena: patch=1 has the highest pretrain acc (83.89%) but TTTs worst (18.5%); BlockDiag p=2 has slightly lower pretrain acc (82.93%) yet nearly doubles TTT (36.25%). The driver of TTT performance is the **BlockDiag ω₀ spectrum**, not raw eval_acc. The filters over-specialize during offline pretraining in a way ~100 TTT epochs cannot undo.
 
+**Hybrid results (2026-06-17, jobs 292170/292171) — attention blocks help but don't close the gap.**
+HAHA (alternating H/A) scores **42.0% P@1 / 46.0% P@2**, HHAA (paired) **40.0% / 44.5%**. Adding attention blocks lifts Pass@1 ~+6pp over pure-Hyena FiLM+BlockDiag *without* LoRA (36.25%), but still falls **−3pp below** the best pure-Hyena with LoRA (45.0%). HAHA > HHAA mirrors the pretraining accuracy gap (73.3% vs 66.6%): interleaving attention throughout beats grouping it. The attention blocks provide some TTT-adaptation benefit, but the Hyena FiLM+BlockDiag + LoRA recipe on pure-Hyena remains the best Hyena-family result. Non-LoRA hybrid variants (full fine-tuning) are planned but not yet run — they may reveal whether LoRA is limiting the attention-block contribution. Note: required fixing an inplace-op bug in `rope.py` (`apply_rope_2d/3d_blh` used `mul_`/`addcmul_` on gradient-tracked slice views → `RuntimeError` during TTT backward); original jobs 290539/290540 all crashed.
+
 ---
 
 ## Final TTT runs to execute (planned) — close out VARC vs Hyena
@@ -106,10 +111,12 @@ autoresearch loop — **LoRA r4 on the mixer projections, lr1e3_const, FiLM ckpt
 
 | # | Checkpoint | Pretrain val_acc | TTT recipe | Submit script | Status |
 |---|-----------|------------------|------------|---------------|--------|
-| 1 | **plasticity wd0.05** (`..._wd05_snap/checkpoint_best.pt`) | 85.58% | LoRA r4, lr1e3_const | _to copy from_ `submit_ttt_autores_lora_400.sh` | ⏳ pending |
+| 1 | **plasticity wd0.05** (`..._wd05_snap/checkpoint_best.pt`) | 85.58% | LoRA r4, lr1e3_const | _adapt from_ `slurm/hipster/submit_ttt_autores_lora_400.sh` | ⏳ pending |
 | 2 | **plasticity wd0.10** (`..._wd10_snap/checkpoint_best.pt`) | 84.13% | LoRA r4, lr1e3_const | ″ | ⏳ pending |
-| 3 | **hybrid HAHA** (`..._hybrid_haha_.../checkpoint_best.pt`) | 73.32% | LoRA r4, lr1e3_const | ″ | ⏳ pending |
-| 4 | **hybrid HHAA** (`..._hybrid_hhaa_.../checkpoint_best.pt`) | 66.59% | LoRA r4, lr1e3_const | ″ | ⏳ pending |
+| 3 | **hybrid HAHA** (`..._hybrid_haha_.../checkpoint_best.pt`) | 73.32% | LoRA r4, lr1e3_const | `slurm/hipster/submit_ttt_hybrid_haha_lora_400.sh` | ✅ 292170 — **42.0% P@1 / 46.0% P@2** |
+| 3b | **hybrid HAHA** no-LoRA | 73.32% | full fine-tune, lr1e3_const | `slurm/hipster/submit_ttt_hybrid_haha_nolora_400.sh` | ⏳ pending (run on next cluster) |
+| 4 | **hybrid HHAA** (`..._hybrid_hhaa_.../checkpoint_best.pt`) | 66.59% | LoRA r4, lr1e3_const | `slurm/hipster/submit_ttt_hybrid_hhaa_lora_400.sh` | ✅ 292171 — **40.0% P@1 / 44.5% P@2** |
+| 4b | **hybrid HHAA** no-LoRA | 66.59% | full fine-tune, lr1e3_const | `slurm/hipster/submit_ttt_hybrid_hhaa_nolora_400.sh` | ⏳ pending (run on next cluster) |
 | 5 | **pure-full mamba** (`saves/offline_train_Mamba_p2/checkpoint_best.pt`) | *pretraining (job 290423)* | LoRA r4, lr1e3_const | ″ | 🟡 pretrain queued; TTT after |
 
 Optional, if any of #1–4 beats 45%: also TTT the **epoch{20,40,60,80}** snapshots of the winning
@@ -195,7 +202,7 @@ The central problem is now treated as **TTT hyperparameter search on the BlockDi
 - **277654 / 277655** — p=1 BlockDiag and p=2 BlockDiag+FiLM pretrains (queued); feed new TTT candidates.
 - **Re-run the hparam ablation on BlockDiag p=2** — the `lr1e3_const` recipe was tuned on p=1; patch=2 has 4× fewer tokens and higher gradient SNR. Probe batch ∈ {16,32}, epochs ∈ {50,200}, and (needs new flag) a decoupled filter LR.
 - **Increase `--num-attempts` 10 → 20–30** — pure majority-vote ensembling, linear cost, typically +2–4pp.
-- **TTT from an earlier pretrain checkpoint** — directly tests the over-specialization hypothesis. Driven by the **snapshot pretrain** job [submit_pretrain_hyena_p2_blockdiag_snapshots.sh](submit_pretrain_hyena_p2_blockdiag_snapshots.sh): re-pretrains BlockDiag p=2 and dumps `checkpoint_epoch{20,40,60,80}.pt` into `saves/offline_train_Hyena_patch2_blockdiag_lr1e3_snap/` so each can be TTT'd separately. **First attempt 280253 crashed in 14s** — the `--periodic-save-dir`/`--save-epochs` flags it passed did not exist in the pipeline (see pitfalls). **Fixed 2026-06-03** (flags added to `utils/args.py`, snapshot save wired into the epoch loop in `offline_train_ARC.py`); ready to resubmit once `performance` CPU quota frees up (blocked behind 277654 by `QOSMaxCpuPerUserLimit`).
+- **TTT from an earlier pretrain checkpoint** — directly tests the over-specialization hypothesis. Driven by the **snapshot pretrain** job [submit_pretrain_hyena_p2_blockdiag_snapshots.sh](slurm/hipster/submit_pretrain_hyena_p2_blockdiag_snapshots.sh): re-pretrains BlockDiag p=2 and dumps `checkpoint_epoch{20,40,60,80}.pt` into `saves/offline_train_Hyena_patch2_blockdiag_lr1e3_snap/` so each can be TTT'd separately. **First attempt 280253 crashed in 14s** — the `--periodic-save-dir`/`--save-epochs` flags it passed did not exist in the pipeline (see pitfalls). **Fixed 2026-06-03** (flags added to `utils/args.py`, snapshot save wired into the epoch loop in `offline_train_ARC.py`); ready to resubmit once `performance` CPU quota frees up (blocked behind 277654 by `QOSMaxCpuPerUserLimit`).
 - **Geometric augmentation during TTT** — TTT currently uses `eval_color_permute_ttt_9` (color only); add on-the-fly transpose/rotate/flip to match what ViT sees at pretrain time.
 - **Param-match** — BlockDiag p=2 is ~24.4M vs ViT 18M; trim depth/embed-dim for a clean comparison.
 - **HHHA hybrid (22257382)** — 3-Hyena + 1-Attention, submitted 2026-04-26; status stale, **needs checking** before any follow-up.
@@ -212,6 +219,8 @@ These caused crashed/wasted runs; recorded here so they aren't repeated. The ind
 - **Configs must live in `nvSubquadratic-private/varc_configs/`**, not in `examples/arc/` — the latter gets wiped by nvSubq branch switches, and configs placed inside the VARC tree aren't found by `_ensure_nvsubq_on_path`. GPFS stale cache has also silently dropped config dirs; verify the config path exists before submitting.
 - **TTT checkpoint loading is architecture-specific.** `utils/load_model.py` detects the task-embedding key by architecture via `_find_task_embed_key()` (Hyena: `arc_resnet.embedding.task_embed.weight`; ViT: `task_token_embed.weight`). The old ViT-only hardcoded key broke Hyena TTT.
 - **Transient `nvSubquadratic-private` rebase/merge state crashes TTT jobs in 7–8 s.** The shared nvSubq checkout is sometimes mid-rebase (e.g. branch `docs/documentation-tracker`), leaving an unresolved git conflict marker (`<<<<<<< HEAD`) in `nvsubquadratic/__init__.py` → `SyntaxError: invalid syntax` at import → every array task that starts during that window dies in ~7–8 s (cost: 20 of 25 r2-mlp screen tasks, 2026-06-08). It self-heals when the rebase finishes. Diagnose with `grep -rlE '^<<<<<<< ' /home/dwessel/code/nvSubquadratic-private/nvsubquadratic/`; once clean, just **resubmit the affected job — `skip-if-done` refills only the holes**. Not a VARC bug; it's an external dependency being edited under us.
+- **Hybrid (Hyena+Attention) TTT needs `rope.py` inplace-op fix.** `apply_rope_2d_blh` / `apply_rope_3d_blh` used inplace `mul_` / `addcmul_` on slice-views of tensors that require grad → `RuntimeError: Output 0 of SliceBackward0 is a view ... modified inplace` during TTT backward. Fixed 2026-06-16 in `nvSubquadratic-private/nvsubquadratic/utils/rope.py`: replaced inplace ops with out-of-place `x_y = x_y * cos_y + rot_y * sin_y`. Crashed jobs: 290539 (HAHA LoRA), 290540 (HHAA LoRA); resubmitted as 292170 / 292171.
+- **`performance` partition requires 32 CPUs per GPU** (capacity allows 16). Always set `--cpus-per-task=32` when using `--partition=performance --gres=gpu:rtx_6000_ada:1`.
 - **Snapshot pretraining needs `--periodic-save-dir` + `--save-epochs`** — these did not exist originally, so job 280253 died in 14s with `unrecognized arguments` (argparse exit 2, surfaced only as a torchrun `ChildFailedError`). Added 2026-06-03: `--periodic-save-dir <dir>` + `--save-epochs "20,40,60,80"` write `checkpoint_epoch<N>.pt` snapshots from the main process inside the epoch loop. Epochs are **1-indexed** (loop is `range(start_epoch, epochs+1)`), so `--save-epochs 100` == the final epoch.
 
 ---

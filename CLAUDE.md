@@ -48,9 +48,16 @@ script/
   test_time_training_VARC_ViT_ARC1.sh     # reference 8-GPU TTT loop
   sanity_ARC1.sh / sanity_ARC2.sh         # single-task TTT sanity check
   analysis/                               # analysis scripts for final scoring
-submit_pretrain_varc_vit_h100.sh  # SLURM: offline pretraining (4×H100)
-submit_augment_data.sh            # SLURM: augmentation (CPU job — adapt partition)
-submit_ttt_arc1_vit_h100.sh       # SLURM: TTT ARC-1 (1×H100, sequential)
+slurm/
+  hipster/                        # SLURM scripts for the hipster cluster
+    submit_pretrain_varc_vit_h100.sh  # offline pretraining (4×H100)
+    submit_augment_data.sh            # augmentation (CPU job — adapt partition)
+    submit_ttt_arc1_vit_h100.sh       # TTT ARC-1 (1×H100, sequential)
+    submit_ttt_hybrid_haha_lora_400.sh   # hybrid HAHA LoRA r4 full-400 TTT
+    submit_ttt_hybrid_hhaa_lora_400.sh   # hybrid HHAA LoRA r4 full-400 TTT
+    submit_ttt_hybrid_haha_nolora_400.sh # hybrid HAHA full fine-tune full-400 TTT
+    submit_ttt_hybrid_hhaa_nolora_400.sh # hybrid HHAA full fine-tune full-400 TTT
+    # ... (all other pretrain/TTT/ablation scripts for hipster)
 saves/
   offline_train_ViT/
     checkpoint_final.pt   # saved after all epochs
@@ -86,7 +93,7 @@ These directories are gitignored (~880 MB). You must regenerate them on each new
 **Our adaptation:** 4×H100, batch 64 — same effective batch size.
 
 ```bash
-sbatch submit_pretrain_varc_vit_h100.sh
+sbatch slurm/hipster/submit_pretrain_varc_vit_h100.sh
 ```
 
 Key arguments in the script:
@@ -109,7 +116,7 @@ TTT requires `checkpoint_best.pt` (not final). WandB project: `VisionARC`.
 Requires `saves/offline_train_ViT/checkpoint_best.pt` and the augmented TTT data from Step 1.
 
 ```bash
-sbatch submit_ttt_arc1_vit_h100.sh
+sbatch slurm/hipster/submit_ttt_arc1_vit_h100.sh
 ```
 
 The script loops over all 400 ARC-1 evaluation tasks sequentially on 1 GPU.  
